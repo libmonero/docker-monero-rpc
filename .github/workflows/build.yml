@@ -43,6 +43,15 @@ jobs:
           sha="${{ github.event.pull_request.head.sha || github.sha }}"
           echo "SHORT_SHA=${sha::7}" >> "$GITHUB_ENV"
 
+      - name: Set expected Monero version
+        run: |
+          # same tag logic as the monero-project GitVersion.cmake
+          cd external/monero-project
+          version=$(sed -n 's/^#define DEF_MONERO_VERSION "\(.*\)"$/\1/p' src/version.cpp.in)
+          tag=$(git rev-parse --short=9 HEAD)
+          test -z "$(git tag -l --points-at HEAD)" || tag=release
+          echo "MONERO_VERSION=v${version}-${tag}" >> "$GITHUB_ENV"
+
       - name: Restore ccache
         uses: actions/cache/restore@v6
         with:
@@ -86,7 +95,9 @@ jobs:
           file monerod
           file monerod | grep -q '${{ matrix.filearch }}' || { echo "wrong architecture: $(file monerod)"; exit 1; }
           file monerod | grep -qE 'statically linked|static-pie linked' || { echo "monerod is not statically linked"; exit 1; }
-          docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monerod --version
+          version=$(docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monerod --version)
+          echo "$version"
+          echo "$version" | grep -qF "($MONERO_VERSION)" || { echo "unexpected version, expected $MONERO_VERSION"; exit 1; }
 
       - name: Build monero-wallet-rpc
         run: |
@@ -99,7 +110,9 @@ jobs:
           file monero-wallet-rpc
           file monero-wallet-rpc | grep -q '${{ matrix.filearch }}' || { echo "wrong architecture: $(file monero-wallet-rpc)"; exit 1; }
           file monero-wallet-rpc | grep -qE 'statically linked|static-pie linked' || { echo "monero-wallet-rpc is not statically linked"; exit 1; }
-          docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monero-wallet-rpc --version
+          version=$(docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monero-wallet-rpc --version)
+          echo "$version"
+          echo "$version" | grep -qF "($MONERO_VERSION)" || { echo "unexpected version, expected $MONERO_VERSION"; exit 1; }
 
       - name: Show ccache statistics
         if: always()
