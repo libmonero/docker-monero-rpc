@@ -50,6 +50,14 @@ jobs:
       - name: Install dependencies
         run: docker exec build ./bin/install_dependencies.sh
 
+      - name: Verify dependencies
+        run: |
+          # record versions of the distro libraries that get statically linked into the shipped binaries
+          docker exec build sh -c "apk list -I | grep -E '^(libsodium-static|openssl-libs-static|boost1\.[0-9]+-static|readline-static|ncurses-static)-[0-9]'"
+          docker exec build sh -c 'for lib in zmq unbound expat sodium ssl crypto readline ncursesw miniupnpc usb-1.0 udev boost_system boost_filesystem boost_thread boost_serialization boost_program_options boost_regex boost_chrono boost_date_time; do
+            test -f "/usr/lib/lib$lib.a" || { echo "missing static library: lib$lib.a"; exit 1; }
+          done'
+
       - name: Build common libraries
         run: docker exec build ./bin/build_monero_rpc.sh cryptonote_core cryptonote_protocol rpc_base
 
