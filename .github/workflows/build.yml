@@ -43,14 +43,26 @@ jobs:
           sha="${{ github.event.pull_request.head.sha || github.sha }}"
           echo "SHORT_SHA=${sha::7}" >> "$GITHUB_ENV"
 
+      - name: Restore ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ matrix.arch }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ matrix.arch }}-
+
       - name: Start build container
         run: |
-          docker run -d --name build -v "$PWD:/src" -w /src -e NPROC=3 "$BUILD_IMAGE" sleep infinity
+          mkdir -p "$RUNNER_TEMP/ccache"
+          docker run -d --name build -v "$PWD:/src" -v "$RUNNER_TEMP/ccache:/ccache" -w /src \
+            -e NPROC=3 -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=1G -e CCACHE_COMPRESS=1 "$BUILD_IMAGE" sleep infinity
           docker exec build apk add --no-cache bash git
           docker exec build git config --global --add safe.directory "*"
 
       - name: Install dependencies
-        run: docker exec build ./bin/install_dependencies.sh
+        run: |
+          docker exec build ./bin/install_dependencies.sh
+          docker exec build ccache --zero-stats
 
       - name: Verify dependencies
         run: |
@@ -88,6 +100,17 @@ jobs:
           file monero-wallet-rpc | grep -q '${{ matrix.filearch }}' || { echo "wrong architecture: $(file monero-wallet-rpc)"; exit 1; }
           file monero-wallet-rpc | grep -qE 'statically linked|static-pie linked' || { echo "monero-wallet-rpc is not statically linked"; exit 1; }
           docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monero-wallet-rpc --version
+
+      - name: Show ccache statistics
+        if: always()
+        run: docker exec build ccache --show-stats
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ matrix.arch }}-${{ github.run_id }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@v7
