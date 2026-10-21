@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# cancel superseded pull request builds; branch and tag builds always run to completion
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   # static musl build, the same environment as the docker images
   BUILD_IMAGE: alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
@@ -20,6 +25,7 @@ jobs:
   linux:
     name: ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
 
     strategy:
       fail-fast: false
