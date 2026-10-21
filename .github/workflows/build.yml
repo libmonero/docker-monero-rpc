@@ -44,7 +44,7 @@ jobs:
       - name: Start build container
         run: |
           docker run -d --name build -v "$PWD:/src" -w /src -e NPROC=3 "$BUILD_IMAGE" sleep infinity
-          docker exec build apk add --no-cache bash
+          docker exec build apk add --no-cache bash git
           docker exec build git config --global --add safe.directory "*"
 
       - name: Install dependencies
