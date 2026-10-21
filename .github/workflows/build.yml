@@ -27,8 +27,10 @@ jobs:
         include:
           - os: ubuntu-24.04
             arch: linux-x86_64
+            filearch: x86-64
           - os: ubuntu-24.04-arm
             arch: linux-arm64
+            filearch: aarch64
 
     steps:
       - name: Checkout repository
@@ -70,6 +72,7 @@ jobs:
         run: |
           cd external/monero-project/build/release/bin
           file monerod
+          file monerod | grep -q '${{ matrix.filearch }}' || { echo "wrong architecture: $(file monerod)"; exit 1; }
           file monerod | grep -qE 'statically linked|static-pie linked' || { echo "monerod is not statically linked"; exit 1; }
           docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monerod --version
 
@@ -82,6 +85,7 @@ jobs:
         run: |
           cd external/monero-project/build/release/bin
           file monero-wallet-rpc
+          file monero-wallet-rpc | grep -q '${{ matrix.filearch }}' || { echo "wrong architecture: $(file monero-wallet-rpc)"; exit 1; }
           file monero-wallet-rpc | grep -qE 'statically linked|static-pie linked' || { echo "monero-wallet-rpc is not statically linked"; exit 1; }
           docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monero-wallet-rpc --version
 
