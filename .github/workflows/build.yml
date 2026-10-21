@@ -1,0 +1,86 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # static musl build, the same environment as the docker images
+  BUILD_IMAGE: alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+
+jobs:
+  linux:
+    name: ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: linux-x86_64
+          - os: ubuntu-24.04-arm
+            arch: linux-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Set short commit hash
+        run: |
+          sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "SHORT_SHA=${sha::7}" >> "$GITHUB_ENV"
+
+      - name: Start build container
+        run: |
+          docker run -d --name build -v "$PWD:/src" -w /src -e NPROC=3 "$BUILD_IMAGE" sleep infinity
+          docker exec build apk add --no-cache bash
+          docker exec build git config --global --add safe.directory "*"
+
+      - name: Install dependencies
+        run: docker exec build ./bin/install_dependencies.sh
+
+      - name: Build common libraries
+        run: docker exec build ./bin/build_monero_rpc.sh cryptonote_core cryptonote_protocol rpc_base
+
+      - name: Build monerod
+        run: |
+          docker exec build ./bin/build_monero_rpc.sh daemon
+          docker exec build strip --strip-unneeded external/monero-project/build/release/bin/monerod
+
+      - name: Verify monerod
+        run: |
+          cd external/monero-project/build/release/bin
+          file monerod
+          file monerod | grep -qE 'statically linked|static-pie linked' || { echo "monerod is not statically linked"; exit 1; }
+          docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monerod --version
+
+      - name: Build monero-wallet-rpc
+        run: |
+          docker exec build ./bin/build_monero_rpc.sh wallet_rpc_server
+          docker exec build strip --strip-unneeded external/monero-project/build/release/bin/monero-wallet-rpc
+
+      - name: Verify monero-wallet-rpc
+        run: |
+          cd external/monero-project/build/release/bin
+          file monero-wallet-rpc
+          file monero-wallet-rpc | grep -qE 'statically linked|static-pie linked' || { echo "monero-wallet-rpc is not statically linked"; exit 1; }
+          docker run --rm -v "$PWD:/bin-src:ro" "$BUILD_IMAGE" /bin-src/monero-wallet-rpc --version
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: monero-rpc-${{ matrix.arch }}-${{ env.SHORT_SHA }}
+          path: |
+            external/monero-project/build/release/bin/monerod
+            external/monero-project/build/release/bin/monero-wallet-rpc
