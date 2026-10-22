@@ -14,6 +14,8 @@ case $(uname -m) in
     *) ARCH="native";;
 esac
 
+# TARGETS is split on purpose
+# shellcheck disable=SC2086
 ( mkdir -p build/release &&
   cd build/release &&
   cmake -D STATIC=ON -D ARCH="$ARCH" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D USE_DEVICE_TREZOR=OFF -D STACK_TRACE=OFF -D CMAKE_EXE_LINKER_FLAGS=-static ../../ &&

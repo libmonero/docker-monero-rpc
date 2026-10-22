@@ -1,0 +1,5 @@
+failure-threshold: warning
+ignored:
+  - DL3003 # cd is needed inside the bind mounted sources
+  - DL3006 # base image is a build arg with a pinned default
+  - DL3018 # alpine packages are not pinned
