@@ -32,6 +32,15 @@ RUN --mount=type=bind,source=bin,target=/src/bin \
     cd /src && ./bin/build_monero_rpc.sh daemon && \
     strip --strip-unneeded -o /monerod external/monero-project/build/release/bin/monerod
 
+FROM build AS build-monero-wallet-rpc
+
+RUN --mount=type=bind,source=bin,target=/src/bin \
+    --mount=type=bind,source=external,target=/src/external,rw \
+    --mount=type=bind,source=.git/modules/external/monero-project,target=/src/.git/modules/external/monero-project,rw \
+    --mount=type=cache,target=/ccache \
+    cd /src && ./bin/build_monero_rpc.sh wallet_rpc_server && \
+    strip --strip-unneeded -o /monero-wallet-rpc external/monero-project/build/release/bin/monero-wallet-rpc
+
 ###################
 # runtime
 ###################
@@ -39,17 +48,21 @@ RUN --mount=type=bind,source=bin,target=/src/bin \
 FROM ${BASE_IMAGE} AS runtime
 
 RUN apk add --no-cache ca-certificates curl && \
-    adduser -D -u 1000 monero && \
-    mkdir -p /home/monero/.bitmonero && \
-    chown -R monero:monero /home/monero
+    adduser -D -u 1000 monero
 
-USER monero
 WORKDIR /home/monero
+
+###################
+# monero-daemon-rpc
+###################
 
 FROM runtime AS monero-daemon-rpc
 
 COPY --from=build-monero-daemon-rpc /monerod /usr/local/bin/monerod
 COPY --chmod=0755 docker/healthcheck-monerod.sh /usr/local/bin/healthcheck.sh
+
+RUN install -d -o monero -g monero /home/monero/.bitmonero
+USER monero
 
 VOLUME /home/monero/.bitmonero
 
@@ -60,3 +73,25 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s CMD healthcheck.sh
 
 # everything else is up to the user, as arguments or in a config file
 ENTRYPOINT ["monerod", "--non-interactive"]
+
+###################
+# monero-wallet-rpc
+###################
+
+FROM runtime AS monero-wallet-rpc
+
+COPY --from=build-monero-wallet-rpc /monero-wallet-rpc /usr/local/bin/monero-wallet-rpc
+COPY --chmod=0755 docker/healthcheck-monero-wallet-rpc.sh /usr/local/bin/healthcheck.sh
+
+RUN install -d -o monero -g monero /home/monero/wallets
+USER monero
+
+VOLUME /home/monero/wallets
+
+# rpc, monero-wallet-rpc has no default bind port
+EXPOSE 18083
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s CMD healthcheck.sh
+
+# everything else is up to the user, as arguments or in a config file
+ENTRYPOINT ["monero-wallet-rpc"]
