@@ -1,0 +1,4 @@
+# .git is kept: monero-project reads its version from it
+/build/
+/external/monero-project/build/
+/.github/

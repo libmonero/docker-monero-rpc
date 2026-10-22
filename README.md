@@ -13,7 +13,7 @@ Dockerized `monerod` and `monero-wallet-rpc` built from [woodser/monero](https:/
 
 | Image | Binary | Default ports |
 |-------|--------|---------------|
-| `monerod` | `monerod` | `18080` p2p, `18081` rpc |
+| `monero-daemon-rpc` | `monerod` | `18080` p2p, `18081` rpc |
 | `monero-wallet-rpc` | `monero-wallet-rpc` | `18083` rpc |
 
 ## Related projects
