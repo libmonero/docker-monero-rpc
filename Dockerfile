@@ -47,8 +47,14 @@ RUN --mount=type=bind,source=bin,target=/src/bin \
 
 FROM ${BASE_IMAGE} AS runtime
 
-RUN apk add --no-cache ca-certificates curl && \
+RUN apk upgrade --no-cache && \
+    apk add --no-cache ca-certificates curl && \
     adduser -D -u 1000 monero
+
+ENV HOME=/home/monero
+
+LABEL org.opencontainers.image.source="https://github.com/libmonero/docker-monero-rpc" \
+      org.opencontainers.image.licenses="MIT AND BSD-3-Clause"
 
 COPY external/monero-project/LICENSE /usr/share/licenses/monero-project/LICENSE
 COPY LICENSE /usr/share/licenses/docker-monero-rpc/LICENSE
@@ -64,8 +70,11 @@ FROM runtime AS monero-daemon-rpc
 COPY --from=build-monero-daemon-rpc /monerod /usr/local/bin/monerod
 COPY --chmod=0755 docker/healthcheck-monerod.sh /usr/local/bin/healthcheck.sh
 
+LABEL org.opencontainers.image.title="monero-daemon-rpc" \
+      org.opencontainers.image.description="monerod built from woodser/monero"
+
 RUN install -d -o monero -g monero /home/monero/.bitmonero
-USER monero
+USER 1000:1000
 
 VOLUME /home/monero/.bitmonero
 
@@ -86,8 +95,11 @@ FROM runtime AS monero-wallet-rpc
 COPY --from=build-monero-wallet-rpc /monero-wallet-rpc /usr/local/bin/monero-wallet-rpc
 COPY --chmod=0755 docker/healthcheck-monero-wallet-rpc.sh /usr/local/bin/healthcheck.sh
 
+LABEL org.opencontainers.image.title="monero-wallet-rpc" \
+      org.opencontainers.image.description="monero-wallet-rpc built from woodser/monero"
+
 RUN install -d -o monero -g monero /home/monero/wallets
-USER monero
+USER 1000:1000
 
 VOLUME /home/monero/wallets
 

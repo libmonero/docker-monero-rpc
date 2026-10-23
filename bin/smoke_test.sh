@@ -7,6 +7,8 @@ NAME=$1
 IMAGE=$2
 VERSION=$("$(dirname "$0")/monero_version.sh")
 CONTAINER=smoke-test-$$
+HARDENED=(--read-only --cap-drop ALL --security-opt no-new-privileges)
+OPTS=()
 CONFIG=$(mktemp)
 # docker cp keeps the owner, the container user has to be able to read it
 chmod 644 "$CONFIG"
@@ -27,7 +29,7 @@ fail() {
 start() {
     local config_path=$1
     shift
-    docker create --name "$CONTAINER" --health-interval=5s --health-start-period=5s "$IMAGE" "$@" > /dev/null
+    docker create --name "$CONTAINER" --health-interval=5s --health-start-period=5s ${OPTS[@]+"${OPTS[@]}"} "$IMAGE" "$@" > /dev/null
     [ -z "$config_path" ] || docker cp "$CONFIG" "$CONTAINER:$config_path"
     docker start "$CONTAINER" > /dev/null
 }
@@ -64,6 +66,11 @@ case $NAME in
         start /home/monero/.bitmonero/bitmonero.conf
         wait_healthy
         stop
+
+        OPTS=("${HARDENED[@]}")
+        start /home/monero/.bitmonero/bitmonero.conf
+        wait_healthy
+        stop
         ;;
     monero-wallet-rpc)
         start "" --stagenet --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass --wallet-dir=/home/monero/wallets --log-file=/dev/null
@@ -75,7 +82,12 @@ case $NAME in
         stop
 
         printf 'stagenet=1\nrpc-bind-ip=0.0.0.0\nconfirm-external-bind=1\nrpc-bind-port=40002\nrpc-login=user:pass\nwallet-dir=/home/monero/wallets\nlog-file=/dev/null\n' > "$CONFIG"
-        start /home/monero/wallet.conf --config-file=/home/monero/wallet.conf
+        start /home/monero/wallets/wallet.conf --config-file=/home/monero/wallets/wallet.conf
+        wait_healthy
+        stop
+
+        OPTS=("${HARDENED[@]}")
+        start /home/monero/wallets/wallet.conf --config-file=/home/monero/wallets/wallet.conf
         wait_healthy
         stop
         ;;
