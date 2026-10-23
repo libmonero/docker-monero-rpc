@@ -86,12 +86,8 @@ jobs:
           build-args: NPROC=3
           outputs: type=image,"name=${{ env.REGISTRY }}/monero-daemon-rpc",push-by-digest=true,name-canonical=true,push=true
           labels: |
-            org.opencontainers.image.title=monero-daemon-rpc
-            org.opencontainers.image.description=monerod built from woodser/monero
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.check.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.licenses=MIT AND BSD-3-Clause
             io.libmonero.monero-version=${{ needs.check.outputs.monero_version }}
             io.libmonero.monero-commit=${{ needs.check.outputs.monero_commit }}
           provenance: mode=max
@@ -108,18 +104,22 @@ jobs:
           build-args: NPROC=3
           outputs: type=image,"name=${{ env.REGISTRY }}/monero-wallet-rpc",push-by-digest=true,name-canonical=true,push=true
           labels: |
-            org.opencontainers.image.title=monero-wallet-rpc
-            org.opencontainers.image.description=monero-wallet-rpc built from woodser/monero
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.check.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.licenses=MIT AND BSD-3-Clause
             io.libmonero.monero-version=${{ needs.check.outputs.monero_version }}
             io.libmonero.monero-commit=${{ needs.check.outputs.monero_commit }}
           provenance: mode=max
           sbom: true
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+
+      - name: Test pushed images
+        run: |
+          ./bin/smoke_test.sh monero-daemon-rpc "$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST"
+          ./bin/smoke_test.sh monero-wallet-rpc "$REGISTRY/monero-wallet-rpc@$WALLET_DIGEST"
+        env:
+          DAEMON_DIGEST: ${{ steps.monero-daemon-rpc.outputs.digest }}
+          WALLET_DIGEST: ${{ steps.monero-wallet-rpc.outputs.digest }}
 
       - name: Export digests
         run: |
@@ -145,6 +145,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     steps:
       - name: Download digests
@@ -201,6 +202,18 @@ jobs:
         run: |
           for image in monero-daemon-rpc monero-wallet-rpc; do
             docker buildx imagetools create -t "$REGISTRY/$image:latest" "$REGISTRY/$image:$VERSION"
+          done
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign manifests
+        run: |
+          for image in monero-daemon-rpc monero-wallet-rpc; do
+            digest=$(docker buildx imagetools inspect "$REGISTRY/$image:$VERSION" --format '{{.Manifest.Digest}}')
+            cosign sign --yes "$REGISTRY/$image@$digest"
           done
         env:
           VERSION: ${{ needs.check.outputs.version }}
