@@ -50,6 +50,9 @@ FROM ${BASE_IMAGE} AS runtime
 RUN apk add --no-cache ca-certificates curl && \
     adduser -D -u 1000 monero
 
+COPY external/monero-project/LICENSE /usr/share/licenses/monero-project/LICENSE
+COPY LICENSE /usr/share/licenses/docker-monero-rpc/LICENSE
+
 WORKDIR /home/monero
 
 ###################
