@@ -5,49 +5,13 @@
 # container configuration whichever way it is given (command line has priority)
 set -eu
 
-args() {
-    tr '\0' '\n' < /proc/1/cmdline
-}
-
-# print the value of a command line flag, as "--flag=value" or "--flag value"
-get_arg() {
-    args | awk -v flag="--$1" '
-        prev == flag { print; exit }
-        index($0, flag "=") == 1 { print substr($0, length(flag) + 2); exit }
-        { prev = $0 }
-    '
-}
-
-# print the value of a config file option, as "option=value"
-get_conf() {
-    [ -f "${CONFIG_FILE}" ] || return 0
-    awk -v key="$1" '
-        /^[ \t]*#/ { next }
-        {
-            eq = index($0, "=")
-            if (eq == 0) next
-            name = substr($0, 1, eq - 1)
-            gsub(/[ \t]/, "", name)
-            if (name != key) next
-            value = substr($0, eq + 1)
-            sub(/^[ \t]+/, "", value)
-            sub(/[ \t\r]+$/, "", value)
-            print value
-            exit
-        }
-    ' "${CONFIG_FILE}"
-}
+# shellcheck source=healthcheck-common.sh
+. /usr/local/lib/healthcheck-common.sh
 
 has_flag() {
     args | grep -qx -- "--$1" && return 0
     case "$(get_conf "$1")" in 1|true|on|yes) return 0 ;; esac
     return 1
-}
-
-get_option() {
-    value="$(get_arg "$1")"
-    [ -n "${value}" ] || value="$(get_conf "$1")"
-    printf '%s' "${value}"
 }
 
 # default config file is <data-dir>/bitmonero.conf, in testnet/ on testnet

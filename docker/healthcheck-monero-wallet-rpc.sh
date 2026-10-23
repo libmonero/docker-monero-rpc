@@ -6,40 +6,8 @@
 # has priority)
 set -eu
 
-# print the value of a command line flag, as "--flag=value" or "--flag value"
-get_arg() {
-    tr '\0' '\n' < /proc/1/cmdline | awk -v flag="--$1" '
-        prev == flag { print; exit }
-        index($0, flag "=") == 1 { print substr($0, length(flag) + 2); exit }
-        { prev = $0 }
-    '
-}
-
-# print the value of a config file option, as "option=value"
-get_conf() {
-    [ -f "${CONFIG_FILE}" ] || return 0
-    awk -v key="$1" '
-        /^[ \t]*#/ { next }
-        {
-            eq = index($0, "=")
-            if (eq == 0) next
-            name = substr($0, 1, eq - 1)
-            gsub(/[ \t]/, "", name)
-            if (name != key) next
-            value = substr($0, eq + 1)
-            sub(/^[ \t]+/, "", value)
-            sub(/[ \t\r]+$/, "", value)
-            print value
-            exit
-        }
-    ' "${CONFIG_FILE}"
-}
-
-get_option() {
-    value="$(get_arg "$1")"
-    [ -n "${value}" ] || value="$(get_conf "$1")"
-    printf '%s' "${value}"
-}
+# shellcheck source=healthcheck-common.sh
+. /usr/local/lib/healthcheck-common.sh
 
 # there is no default config file
 CONFIG_FILE="$(get_arg config-file)"

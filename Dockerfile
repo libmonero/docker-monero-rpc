@@ -56,6 +56,7 @@ ENV HOME=/home/monero
 LABEL org.opencontainers.image.source="https://github.com/libmonero/docker-monero-rpc" \
       org.opencontainers.image.licenses="MIT AND BSD-3-Clause"
 
+COPY --chmod=0644 docker/healthcheck-common.sh /usr/local/lib/healthcheck-common.sh
 COPY external/monero-project/LICENSE /usr/share/licenses/monero-project/LICENSE
 COPY LICENSE /usr/share/licenses/docker-monero-rpc/LICENSE
 
