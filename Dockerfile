@@ -23,22 +23,29 @@ RUN install_dependencies.sh
 # The sources are bind mounted instead of copied to keep the layers small, and
 # only the paths the build needs, so unrelated changes do not rebuild it. The
 # git metadata of the submodule is there for the version monero-project reports.
+# VARIANT names a patch in patches/ to apply on top of the submodule.
 FROM build AS build-monero-daemon-rpc
 
+ARG VARIANT=default
 RUN --mount=type=bind,source=bin,target=/src/bin \
+    --mount=type=bind,source=patches,target=/src/patches \
     --mount=type=bind,source=external,target=/src/external,rw \
     --mount=type=bind,source=.git/modules/external/monero-project,target=/src/.git/modules/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
-    cd /src && ./bin/build_monero_rpc.sh daemon && \
+    cd /src && ([ "$VARIANT" = default ] || git -C external/monero-project apply "/src/patches/$VARIANT.patch") && \
+    ./bin/build_monero_rpc.sh daemon && \
     strip --strip-unneeded -o /monerod external/monero-project/build/release/bin/monerod
 
 FROM build AS build-monero-wallet-rpc
 
+ARG VARIANT=default
 RUN --mount=type=bind,source=bin,target=/src/bin \
+    --mount=type=bind,source=patches,target=/src/patches \
     --mount=type=bind,source=external,target=/src/external,rw \
     --mount=type=bind,source=.git/modules/external/monero-project,target=/src/.git/modules/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
-    cd /src && ./bin/build_monero_rpc.sh wallet_rpc_server && \
+    cd /src && ([ "$VARIANT" = default ] || git -C external/monero-project apply "/src/patches/$VARIANT.patch") && \
+    ./bin/build_monero_rpc.sh wallet_rpc_server && \
     strip --strip-unneeded -o /monero-wallet-rpc external/monero-project/build/release/bin/monero-wallet-rpc
 
 ###################
@@ -53,8 +60,10 @@ RUN apk upgrade --no-cache && \
 
 ENV HOME=/home/monero
 
+ARG VARIANT=default
 LABEL org.opencontainers.image.source="https://github.com/libmonero/docker-monero-rpc" \
-      org.opencontainers.image.licenses="MIT AND BSD-3-Clause"
+      org.opencontainers.image.licenses="MIT AND BSD-3-Clause" \
+      io.libmonero.variant="${VARIANT}"
 
 COPY --chmod=0644 docker/healthcheck-common.sh /usr/local/lib/healthcheck-common.sh
 COPY external/monero-project/LICENSE /usr/share/licenses/monero-project/LICENSE
