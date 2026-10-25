@@ -20,3 +20,10 @@ git submodule update --init --recursive --force --quiet
 cd ../..
 
 echo "$MONERO_CPP $TAG pins monero-project ${commit:0:9}, $(./bin/monero_version.sh)"
+
+# the patches have to keep applying to the new commit
+status=0
+for patch in patches/*.patch; do
+    git -C external/monero-project apply --check "$PWD/$patch" 2> /dev/null || { echo "$patch does not apply"; status=1; }
+done
+exit $status
