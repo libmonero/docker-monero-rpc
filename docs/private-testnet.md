@@ -53,6 +53,30 @@ curl -s http://127.0.0.1:28081/json_rpc -H 'Content-Type: application/json' \
 
 `--version` is the same in both variants, as the version comes from the commit. The variant can be told from the image tag (`private-testnet-` prefix), from the `io.libmonero.variant` label, or with the rpc call above.
 
+## Compose
+
+[examples/private-testnet/docker-compose.yml](../examples/private-testnet/docker-compose.yml) has the same services and ports as the [regtest one](../examples/regtest/docker-compose.yml), two nodes connected to each other and three wallets, with `--testnet` and the `private-testnet` images. The nodes only connect to each other (`--add-exclusive-node`), they never reach the public testnet.
+
+```bash
+docker compose -f examples/private-testnet/docker-compose.yml up -d
+```
+
+`generateblocks` only exists in regtest, here the blocks are mined with `start_mining`, to the address of a wallet created with `create_wallet` as in [usage](usage.md#monero-wallet-rpc):
+
+```bash
+address=$(curl -s --digest -u rpc_user:abc123 http://127.0.0.1:18082/json_rpc \
+  -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":"0","method":"get_address"}' | grep -o '"address": *"[^"]*"' | head -1 | cut -d'"' -f4)
+
+curl --digest -u rpc_daemon_user:abc123 http://127.0.0.1:18081/start_mining \
+  -d "{\"miner_address\":\"$address\",\"threads_count\":1,\"do_background_mining\":false,\"ignore_battery\":true}"
+```
+
+The `version` in the result of `hard_fork_info` goes to 2 at height 10 and to 3 at height 20, and so on up to 16 at height 150. One thread mines a block in a few seconds. Stop with:
+
+```bash
+curl --digest -u rpc_daemon_user:abc123 http://127.0.0.1:18081/stop_mining -d ''
+```
+
 ## Building
 
 ```bash

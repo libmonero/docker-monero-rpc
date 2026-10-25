@@ -28,6 +28,14 @@ Dockerized `monerod` and `monero-wallet-rpc` built from [woodser/monero](https:/
 
 The `private-testnet` variant is built with a [patch](patches/private-testnet.patch) that schedules the testnet hardforks at low block heights, for private testnets. Its tags are prefixed with `private-testnet-`.
 
+## Documentation
+
+* [Usage](docs/usage.md)
+* [Security](docs/security.md)
+* [Tests](docs/testing.md), with a regtest [compose file](examples/regtest/docker-compose.yml)
+* [Private testnet](docs/private-testnet.md), with a [compose file](examples/private-testnet/docker-compose.yml)
+* [Compose example](examples/docker-compose.yml) with a node and a wallet
+
 ## Related projects
 
 * [monero-cpp](https://github.com/woodser/monero-cpp)

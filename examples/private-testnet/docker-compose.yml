@@ -1,0 +1,150 @@
+name: monero-private-testnet
+
+x-wallet: &wallet
+  image: ghcr.io/libmonero/monero-wallet-rpc:private-testnet
+  depends_on:
+    - node_1
+    - node_2
+
+services:
+
+  node_1:
+    image: ghcr.io/libmonero/monero-daemon-rpc:private-testnet
+    command: [
+      "--testnet",
+      "--no-igd",
+      "--fixed-difficulty=500",
+      "--log-level=3",
+      "--p2p-bind-ip=0.0.0.0",
+      "--p2p-bind-port=48080",
+      "--rpc-bind-ip=0.0.0.0",
+      "--rpc-bind-port=18089",
+      "--rpc-ssl=disabled",
+      "--rpc-login=rpc_daemon_user:abc123",
+      "--rpc-access-control-origins=*",
+      "--rpc-max-connections-per-private-ip=100",
+      "--disable-rpc-ban",
+      "--confirm-external-bind",
+      "--add-exclusive-node=node_2:18080",
+      "--hide-my-port",
+      "--no-zmq",
+      "--max-connections-per-ip=100"
+    ]
+    volumes:
+      - node_1_data:/home/monero/.bitmonero
+    ports:
+      - "127.0.0.1:48080:48080"
+      - "127.0.0.1:18089:18089"
+    restart: on-failure
+
+  node_2:
+    image: ghcr.io/libmonero/monero-daemon-rpc:private-testnet
+    command: [
+      "--testnet",
+      "--no-igd",
+      "--fixed-difficulty=500",
+      "--log-level=3",
+      "--p2p-bind-ip=0.0.0.0",
+      "--p2p-bind-port=18080",
+      "--rpc-bind-ip=0.0.0.0",
+      "--rpc-bind-port=18081",
+      "--rpc-ssl=disabled",
+      "--rpc-login=rpc_daemon_user:abc123",
+      "--rpc-access-control-origins=*",
+      "--rpc-max-connections-per-private-ip=100",
+      "--zmq-rpc-bind-ip=0.0.0.0",
+      "--zmq-rpc-bind-port=18085",
+      "--zmq-pub=tcp://0.0.0.0:18086",
+      "--disable-rpc-ban",
+      "--confirm-external-bind",
+      "--confirm-zmq-rpc-external-bind",
+      "--add-exclusive-node=node_1:48080",
+      "--hide-my-port",
+      "--max-connections-per-ip=100"
+    ]
+    volumes:
+      - node_2_data:/home/monero/.bitmonero
+    ports:
+      - "127.0.0.1:18080:18080"
+      - "127.0.0.1:18081:18081"
+      - "127.0.0.1:18085:18085"
+      - "127.0.0.1:18086:18086"
+    depends_on:
+      - node_1
+    restart: on-failure
+
+  xmr_wallet_1:
+    <<: *wallet
+    command: [
+      "--testnet",
+      "--log-level=3",
+      "--allow-mismatched-daemon-version",
+      "--rpc-bind-ip=0.0.0.0",
+      "--confirm-external-bind",
+      "--rpc-bind-port=18082",
+      "--trusted-daemon",
+      "--daemon-address=node_2:18081",
+      "--daemon-login=rpc_daemon_user:abc123",
+      "--rpc-login=rpc_user:abc123",
+      "--rpc-max-connections-per-private-ip=100",
+      "--wallet-dir=/home/monero/wallets",
+      "--rpc-access-control-origins=*",
+      "--log-file=/dev/null"
+    ]
+    volumes:
+      - xmr_wallet_1_data:/home/monero/wallets
+    ports:
+      - "127.0.0.1:18082:18082"
+
+  xmr_wallet_2:
+    <<: *wallet
+    command: [
+      "--testnet",
+      "--log-level=3",
+      "--allow-mismatched-daemon-version",
+      "--rpc-bind-ip=0.0.0.0",
+      "--confirm-external-bind",
+      "--rpc-bind-port=18083",
+      "--trusted-daemon",
+      "--daemon-address=node_2:18081",
+      "--daemon-login=rpc_daemon_user:abc123",
+      "--rpc-login=rpc_user:abc123",
+      "--rpc-max-connections-per-private-ip=100",
+      "--wallet-dir=/home/monero/wallets",
+      "--rpc-access-control-origins=*",
+      "--log-file=/dev/null"
+    ]
+    volumes:
+      - xmr_wallet_2_data:/home/monero/wallets
+    ports:
+      - "127.0.0.1:18083:18083"
+
+  xmr_wallet_3:
+    <<: *wallet
+    command: [
+      "--testnet",
+      "--log-level=3",
+      "--allow-mismatched-daemon-version",
+      "--rpc-bind-ip=0.0.0.0",
+      "--confirm-external-bind",
+      "--rpc-bind-port=18084",
+      "--trusted-daemon",
+      "--daemon-address=node_2:18081",
+      "--daemon-login=rpc_daemon_user:abc123",
+      "--rpc-login=rpc_user:abc123",
+      "--rpc-max-connections-per-private-ip=100",
+      "--wallet-dir=/home/monero/wallets",
+      "--rpc-access-control-origins=*",
+      "--log-file=/dev/null"
+    ]
+    volumes:
+      - xmr_wallet_3_data:/home/monero/wallets
+    ports:
+      - "127.0.0.1:18084:18084"
+
+volumes:
+  node_1_data:
+  node_2_data:
+  xmr_wallet_1_data:
+  xmr_wallet_2_data:
+  xmr_wallet_3_data:
