@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
-# usage: smoke_test.sh <monero-daemon-rpc|monero-wallet-rpc> <image>
+# usage: smoke_test.sh <monero-daemon-rpc|monero-wallet-rpc> <image> [default|private-testnet]
 set -euo pipefail
 
 NAME=$1
 IMAGE=$2
+VARIANT=${3:-default}
 VERSION=$("$(dirname "$0")/monero_version.sh")
 CONTAINER=smoke-test-$$
 HARDENED=(--read-only --cap-drop ALL --security-opt no-new-privileges)
@@ -21,7 +22,7 @@ trap cleanup EXIT
 
 fail() {
     echo "$*" >&2
-    docker logs "$CONTAINER" >&2 2>&1 || true
+    ! docker inspect "$CONTAINER" > /dev/null 2>&1 || docker logs "$CONTAINER" >&2 2>&1
     exit 1
 }
 
@@ -32,6 +33,14 @@ start() {
     docker create --name "$CONTAINER" --health-interval=5s --health-start-period=5s ${OPTS[@]+"${OPTS[@]}"} "$IMAGE" "$@" > /dev/null
     [ -z "$config_path" ] || docker cp "$CONFIG" "$CONTAINER:$config_path"
     docker start "$CONTAINER" > /dev/null
+}
+
+# earliest height of a hard fork version, as reported by the daemon
+hard_fork_height() {
+    docker exec "$CONTAINER" curl --fail --silent http://127.0.0.1:28081/json_rpc \
+        --header 'Content-Type: application/json' \
+        --data "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"hard_fork_info\",\"params\":{\"version\":$1}}" |
+        tr -d ' \n' | sed 's/.*"earliest_height":\([0-9]*\).*/\1/'
 }
 
 wait_healthy() {
@@ -55,6 +64,14 @@ output=$(docker run --rm "$IMAGE" --version)
 echo "$output"
 echo "$output" | grep -qF "($VERSION)" || fail "expected version $VERSION"
 [ "$(docker run --rm --entrypoint id "$IMAGE" -u)" != 0 ] || fail "image runs as root"
+[ "$(docker inspect -f '{{index .Config.Labels "io.libmonero.variant"}}' "$IMAGE")" = "$VARIANT" ] || fail "image is not the $VARIANT variant"
+
+# testnet heights of hard fork versions 2 and 16
+case $VARIANT in
+    default) HARD_FORKS=(624634 1983520) ;;
+    private-testnet) HARD_FORKS=(10 150) ;;
+    *) fail "unknown variant $VARIANT" ;;
+esac
 
 case $NAME in
     monero-daemon-rpc)
@@ -70,6 +87,13 @@ case $NAME in
         OPTS=("${HARDENED[@]}")
         start /home/monero/.bitmonero/bitmonero.conf
         wait_healthy
+        stop
+
+        OPTS=()
+        start "" --testnet --offline --rpc-bind-ip=0.0.0.0 --confirm-external-bind
+        wait_healthy
+        [ "$(hard_fork_height 2)" = "${HARD_FORKS[0]}" ] || fail "unexpected hard fork 2 height for $VARIANT"
+        [ "$(hard_fork_height 16)" = "${HARD_FORKS[1]}" ] || fail "unexpected hard fork 16 height for $VARIANT"
         stop
         ;;
     monero-wallet-rpc)
