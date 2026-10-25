@@ -20,33 +20,41 @@ RUN git config --global --add safe.directory '*'
 COPY bin/install_dependencies.sh /usr/local/bin/install_dependencies.sh
 RUN install_dependencies.sh
 
+# The git metadata of the submodule changes with every checkout and would
+# invalidate the cache of the build stages, so only the version tag is read from it.
+FROM build AS version
+
+RUN --mount=type=bind,source=.git/modules/external/monero-project,target=/git \
+    git="git --git-dir=/git --work-tree=/tmp" && \
+    tag=$($git rev-parse --short=9 HEAD) && \
+    if [ -n "$($git tag -l --points-at HEAD)" ]; then tag=release; fi && \
+    echo "$tag" > /version
+
 # The sources are bind mounted instead of copied to keep the layers small, and
-# only the paths the build needs, so unrelated changes do not rebuild it. The
-# git metadata of the submodule is there for the version monero-project reports.
-# VARIANT names a patch in patches/ to apply on top of the submodule.
+# only the paths the build needs. VARIANT names a patch in patches/ to apply.
 FROM build AS build-monero-daemon-rpc
 
+COPY --from=version /version /version
+
 ARG VARIANT=default
-RUN --mount=type=bind,source=bin,target=/src/bin \
+RUN --mount=type=bind,source=bin/build_monero_rpc.sh,target=/src/bin/build_monero_rpc.sh \
+    --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
     --mount=type=bind,source=patches,target=/src/patches \
     --mount=type=bind,source=external,target=/src/external,rw \
-    --mount=type=bind,source=.git/modules/external/monero-project,target=/src/.git/modules/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
-    cd /src && ([ "$VARIANT" = default ] || git -C external/monero-project apply "/src/patches/$VARIANT.patch") && \
-    ./bin/build_monero_rpc.sh daemon && \
-    strip --strip-unneeded -o /monerod external/monero-project/build/release/bin/monerod
+    /src/bin/build_in_docker.sh daemon monerod /monerod
 
 FROM build AS build-monero-wallet-rpc
 
+COPY --from=version /version /version
+
 ARG VARIANT=default
-RUN --mount=type=bind,source=bin,target=/src/bin \
+RUN --mount=type=bind,source=bin/build_monero_rpc.sh,target=/src/bin/build_monero_rpc.sh \
+    --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
     --mount=type=bind,source=patches,target=/src/patches \
     --mount=type=bind,source=external,target=/src/external,rw \
-    --mount=type=bind,source=.git/modules/external/monero-project,target=/src/.git/modules/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
-    cd /src && ([ "$VARIANT" = default ] || git -C external/monero-project apply "/src/patches/$VARIANT.patch") && \
-    ./bin/build_monero_rpc.sh wallet_rpc_server && \
-    strip --strip-unneeded -o /monero-wallet-rpc external/monero-project/build/release/bin/monero-wallet-rpc
+    /src/bin/build_in_docker.sh wallet_rpc_server monero-wallet-rpc /monero-wallet-rpc
 
 ###################
 # runtime

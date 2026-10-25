@@ -3,7 +3,9 @@
 # build monerod and monero-wallet-rpc from the monero-project submodule;
 # targets can be passed as arguments, e.g. daemon (default: daemon wallet_rpc_server)
 cd ./external/monero-project/ || exit 1
-git submodule update --init --force || exit 1
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    git submodule update --init --force || exit 1
+fi
 TARGETS=${*:-daemon wallet_rpc_server}
 HOST_NCORES=${NPROC:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)}
 
@@ -14,9 +16,9 @@ case $(uname -m) in
     *) ARCH="native";;
 esac
 
-# TARGETS is split on purpose
+# TARGETS and MANUAL_SUBMODULES are split on purpose
 # shellcheck disable=SC2086
 ( mkdir -p build/release &&
   cd build/release &&
-  cmake -D STATIC=ON -D ARCH="$ARCH" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D USE_DEVICE_TREZOR=OFF -D STACK_TRACE=OFF -D CMAKE_EXE_LINKER_FLAGS=-static ../../ &&
+  cmake -D STATIC=ON -D ARCH="$ARCH" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D USE_DEVICE_TREZOR=OFF -D STACK_TRACE=OFF -D CMAKE_EXE_LINKER_FLAGS=-static ${MANUAL_SUBMODULES:+-D MANUAL_SUBMODULES=1} ../../ &&
   make -j"$HOST_NCORES" $TARGETS ) || exit 1
