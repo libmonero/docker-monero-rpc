@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# usage: update_monero_cpp.sh <monero-cpp tag>, e.g. v0.9.10
+# usage: update_monero_rpc.sh <monero-cpp tag>, e.g. v0.9.10
 # moves the monero-project submodule to the commit pinned by that monero-cpp release
 set -euo pipefail
 
