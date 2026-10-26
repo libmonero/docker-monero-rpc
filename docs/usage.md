@@ -50,6 +50,16 @@ curl --digest -u rpc_user:abc123 http://127.0.0.1:38083/json_rpc -H 'Content-Typ
 
 The wallet takes `--stagenet` and `--testnet`. For a regtest daemon, start the wallet without a network flag.
 
+## Ports
+
+| Network | p2p | rpc | zmq rpc |
+|---------|-----|-----|---------|
+| mainnet | `18080` | `18081` | `18082` |
+| testnet | `28080` | `28081` | `28082` |
+| stagenet | `38080` | `38081` | `38082` |
+
+`monero-wallet-rpc` has no default port, `--rpc-bind-port` is required. The examples use `38083` on stagenet and `18082` to `18084` in the tests. The restricted rpc of a public node is on `--rpc-restricted-bind-port`, `18089` in the examples. The ports of the images are only documentation, they are published with `-p` or `ports:`.
+
 ## Config file
 
 Mount a config file and pass it with `--config-file`:
