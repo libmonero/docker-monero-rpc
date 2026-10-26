@@ -1,0 +1,53 @@
+# Notice
+
+## Code adapted from other projects
+
+Parts of this project were adapted from the following projects, under the MIT license:
+
+* [simple-monerod-docker](https://github.com/sethforprivacy/simple-monerod-docker), Copyright (c) 2021 Seth For Privacy (@sethforprivacy): the healthcheck functions, the structure of the Dockerfile and of the workflows.
+* [docker-monero-node](https://github.com/lalanza808/docker-monero-node), Copyright (c) 2020 lalanza808: the structure of the compose files.
+* [monero-cpp](https://github.com/woodser/monero-cpp), Copyright (c) woodser: the versions and checksums of the dependencies and the verification steps of the build workflow.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## monero-project
+
+The images contain binaries built from [woodser/monero](https://github.com/woodser/monero), a fork of [monero-project/monero](https://github.com/monero-project/monero), which is released under the BSD 3-Clause license, Copyright (c) 2014-2022, The Monero Project. Its license is in `/usr/share/licenses/monero-project/LICENSE` in the images. The files in [patches](patches) are changes to its sources and are under the same license. The `private-testnet` patch is by woodser, from [haveno-dex/monero](https://github.com/haveno-dex/monero).
+
+The sources of monero-project include components with their own licenses, among them RandomX (BSD 3-Clause), easylogging++ (MIT) and rapidjson (MIT).
+
+## Libraries in the binaries
+
+`monerod` and `monero-wallet-rpc` are linked statically with these libraries, installed by [bin/install_dependencies.sh](bin/install_dependencies.sh):
+
+| Library | License |
+|---------|---------|
+| [musl libc](https://musl.libc.org) | MIT |
+| libstdc++ and libgcc | GPL-3.0-or-later with the GCC Runtime Library Exception |
+| [Boost](https://www.boost.org) | BSL-1.0 |
+| [OpenSSL](https://www.openssl.org) | Apache-2.0 |
+| [libsodium](https://libsodium.org) | ISC |
+| [Unbound](https://nlnetlabs.nl/projects/unbound/) | BSD-3-Clause |
+| [ZeroMQ](https://zeromq.org) | LGPL-3.0-or-later with a static linking exception |
+
+Boost, OpenSSL and libsodium come from the packages of Alpine Linux, Unbound and ZeroMQ are built from the source archives listed in `bin/install_dependencies.sh`. This repository has the scripts to build the binaries again from source, so the libraries can be replaced.
+
+## Images
+
+The images are based on [Alpine Linux](https://alpinelinux.org), whose packages carry their own licenses.

@@ -52,7 +52,7 @@ Thanks to [@sethforprivacy](https://github.com/sethforprivacy) and [@lalanza808]
 * [simple-monerod-docker](https://github.com/sethforprivacy/simple-monerod-docker): the static build on Alpine, the healthcheck, the smoke tests and the build and publish workflows.
 * [docker-monero-node](https://github.com/lalanza808/docker-monero-node): the images the tests of monero-python and monero-java have been using, and the compose files with log rotation and variables.
 
-Parts of both were adapted under their MIT licenses. The patch of the [private testnet](docs/private-testnet.md) is by woodser, from [haveno-dex/monero](https://github.com/haveno-dex/monero).
+Parts of both were adapted under their MIT licenses, see [NOTICE](NOTICE). The patch of the [private testnet](docs/private-testnet.md) is by woodser, from [haveno-dex/monero](https://github.com/haveno-dex/monero).
 
 ## License
 

@@ -76,6 +76,7 @@ LABEL org.opencontainers.image.source="https://github.com/libmonero/docker-moner
 COPY --chmod=0644 docker/healthcheck-common.sh /usr/local/lib/healthcheck-common.sh
 COPY external/monero-project/LICENSE /usr/share/licenses/monero-project/LICENSE
 COPY LICENSE /usr/share/licenses/docker-monero-rpc/LICENSE
+COPY NOTICE /usr/share/licenses/docker-monero-rpc/NOTICE
 
 WORKDIR /home/monero
 
