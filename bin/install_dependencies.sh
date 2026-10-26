@@ -17,8 +17,7 @@ apk add --no-cache \
     boost-program_options boost-random boost-regex boost-serialization boost-static \
     boost-system boost-thread ca-certificates ccache cmake eudev-dev file flex g++ git \
     libsodium-dev libsodium-static libusb-dev linux-headers make miniupnpc-dev \
-    ncurses-dev ncurses-static openssl-dev openssl-libs-static pcsc-lite-dev pkgconf protobuf-dev \
-    rapidjson-dev readline-dev readline-static wget
+    openssl-dev openssl-libs-static pcsc-lite-dev pkgconf protobuf-dev rapidjson-dev wget
 
 # static libs built from source, built with -fPIC to match monero-project
 export CFLAGS='-fPIC'
