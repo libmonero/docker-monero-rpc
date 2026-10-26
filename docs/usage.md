@@ -2,7 +2,7 @@
 
 The images take the arguments of `monerod` and `monero-wallet-rpc`. Nothing is set by default, except `--non-interactive` in the daemon. Everything can also be set in a config file.
 
-Compose files for a node with a wallet and for tests are in [examples](../examples).
+Compose files for a node with a wallet and for tests are in [examples](../examples). They take the image tag from `MONERO_TAG`, in the environment or in a `.env` file next to the compose file, for example `MONERO_TAG=v0.18.5.1-1 docker compose -f examples/docker-compose.yml up -d`.
 
 ## monero-daemon-rpc
 
@@ -91,3 +91,5 @@ Both images have one. It reads the rpc port, the network and `rpc-login` from th
 ## Logs
 
 The wallet also writes `monero-wallet-rpc.log` in `/home/monero`. `--log-file=/dev/null` leaves the logs in the container output only, and is needed with `--read-only`.
+
+Docker keeps the container output without a limit. The compose examples rotate it with `max-size: 50m` and `max-file: 5`, with `docker run` use `--log-opt max-size=50m --log-opt max-file=5`.

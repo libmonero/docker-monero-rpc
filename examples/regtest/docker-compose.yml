@@ -1,7 +1,15 @@
 name: monero-regtest
 
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+
 x-wallet: &wallet
-  image: ghcr.io/libmonero/monero-wallet-rpc:latest
+  <<: *logging
+  image: ghcr.io/libmonero/monero-wallet-rpc:${MONERO_TAG:-latest}
   depends_on:
     - node_1
     - node_2
@@ -9,7 +17,7 @@ x-wallet: &wallet
 services:
 
   node_1:
-    image: ghcr.io/libmonero/monero-daemon-rpc:latest
+    image: ghcr.io/libmonero/monero-daemon-rpc:${MONERO_TAG:-latest}
     command: [
       "--regtest",
       "--fixed-difficulty=500",
@@ -35,9 +43,10 @@ services:
       - "127.0.0.1:48080:48080"
       - "127.0.0.1:18089:18089"
     restart: on-failure
+    <<: *logging
 
   node_2:
-    image: ghcr.io/libmonero/monero-daemon-rpc:latest
+    image: ghcr.io/libmonero/monero-daemon-rpc:${MONERO_TAG:-latest}
     command: [
       "--regtest",
       "--fixed-difficulty=500",
@@ -70,6 +79,7 @@ services:
     depends_on:
       - node_1
     restart: on-failure
+    <<: *logging
 
   xmr_wallet_1:
     <<: *wallet

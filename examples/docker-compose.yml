@@ -1,7 +1,14 @@
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+
 services:
 
   monerod:
-    image: ghcr.io/libmonero/monero-daemon-rpc:latest
+    image: ghcr.io/libmonero/monero-daemon-rpc:${MONERO_TAG:-latest}
     command: [
       "--stagenet",
       "--no-igd",
@@ -16,9 +23,10 @@ services:
       - "38080:38080"
       - "127.0.0.1:38081:38081"
     restart: unless-stopped
+    <<: *logging
 
   monero-wallet-rpc:
-    image: ghcr.io/libmonero/monero-wallet-rpc:latest
+    image: ghcr.io/libmonero/monero-wallet-rpc:${MONERO_TAG:-latest}
     command: [
       "--stagenet",
       "--daemon-address=monerod:38081",
@@ -38,6 +46,7 @@ services:
       monerod:
         condition: service_healthy
     restart: unless-stopped
+    <<: *logging
 
 volumes:
   monerod_data:
