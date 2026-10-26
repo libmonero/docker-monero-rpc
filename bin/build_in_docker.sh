@@ -23,4 +23,5 @@ sed "s/@VERSIONTAG@/$TAG/;s/@VERSION_IS_RELEASE@/$release/" external/monero-proj
 mv external/monero-project/src/version.cpp.in.new external/monero-project/src/version.cpp.in
 
 MANUAL_SUBMODULES=1 ./bin/build_monero_rpc.sh "$TARGET"
+ccache --show-stats
 strip --strip-unneeded -o "$OUTPUT" "external/monero-project/build/release/bin/$BINARY"
