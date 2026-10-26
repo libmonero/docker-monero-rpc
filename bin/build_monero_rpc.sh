@@ -16,9 +16,10 @@ case $(uname -m) in
     *) ARCH="native";;
 esac
 
+# musl threads get a 128 KB stack, libunbound crashes on it when resolving openalias
 # TARGETS and MANUAL_SUBMODULES are split on purpose
 # shellcheck disable=SC2086
 ( mkdir -p build/release &&
   cd build/release &&
-  cmake -D STATIC=ON -D ARCH="$ARCH" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D USE_DEVICE_TREZOR=OFF -D USE_READLINE=OFF -D STACK_TRACE=OFF -D CMAKE_EXE_LINKER_FLAGS=-static ${MANUAL_SUBMODULES:+-D MANUAL_SUBMODULES=1} ../../ &&
+  cmake -D STATIC=ON -D ARCH="$ARCH" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D USE_DEVICE_TREZOR=OFF -D USE_READLINE=OFF -D STACK_TRACE=OFF -D CMAKE_EXE_LINKER_FLAGS="-static -Wl,-z,stack-size=8388608" ${MANUAL_SUBMODULES:+-D MANUAL_SUBMODULES=1} ../../ &&
   make -j"$HOST_NCORES" $TARGETS ) || exit 1

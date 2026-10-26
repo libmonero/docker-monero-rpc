@@ -105,6 +105,15 @@ case $NAME in
         docker exec "$CONTAINER" test -f /home/monero/wallets/smoke.keys || fail "wallet was not created"
         stop
 
+        # the lookup can be slow or fail where there is no dnssec, the wallet only has to survive it
+        start "" --stagenet --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass --wallet-dir=/home/monero/wallets --log-file=/dev/null
+        wait_healthy
+        docker exec "$CONTAINER" curl --silent --max-time 10 --digest --user user:pass http://127.0.0.1:40001/json_rpc \
+            --header 'Content-Type: application/json' \
+            --data '{"jsonrpc":"2.0","id":"0","method":"validate_address","params":{"address":"donate@getmonero.org","any_net_type":true,"allow_openalias":true}}' > /dev/null || true
+        [ "$(docker inspect -f '{{.State.Status}}' "$CONTAINER")" = running ] || fail "wallet died on an openalias lookup"
+        docker rm -fv "$CONTAINER" > /dev/null
+
         printf 'stagenet=1\nrpc-bind-ip=0.0.0.0\nconfirm-external-bind=1\nrpc-bind-port=40002\nrpc-login=user:pass\nwallet-dir=/home/monero/wallets\nlog-file=/dev/null\n' > "$CONFIG"
         start /home/monero/wallets/wallet.conf --config-file=/home/monero/wallets/wallet.conf
         wait_healthy
