@@ -59,8 +59,8 @@ jobs:
             NPROC=3
             VARIANT=${{ matrix.variant }}
           load: true
-          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.variant }}
+          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-daemon
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.variant }}-daemon
 
       - name: Test monero-daemon-rpc
         run: ./bin/smoke_test.sh monero-daemon-rpc monero-daemon-rpc:ci ${{ matrix.variant }}
@@ -75,8 +75,8 @@ jobs:
             NPROC=3
             VARIANT=${{ matrix.variant }}
           load: true
-          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.variant }}
+          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet
 
       - name: Test monero-wallet-rpc
         run: ./bin/smoke_test.sh monero-wallet-rpc monero-wallet-rpc:ci ${{ matrix.variant }}
