@@ -1,6 +1,7 @@
 # Monero RPC Docker
 
 [![Build](https://github.com/libmonero/docker-monero-rpc/actions/workflows/build.yml/badge.svg)](https://github.com/libmonero/docker-monero-rpc/actions/workflows/build.yml)
+[![Test](https://github.com/libmonero/docker-monero-rpc/actions/workflows/test.yml/badge.svg)](https://github.com/libmonero/docker-monero-rpc/actions/workflows/test.yml)
 [![Lint](https://github.com/libmonero/docker-monero-rpc/actions/workflows/lint.yml/badge.svg)](https://github.com/libmonero/docker-monero-rpc/actions/workflows/lint.yml)
 [![Release](https://img.shields.io/github/v/release/libmonero/docker-monero-rpc?logo=github)](https://github.com/libmonero/docker-monero-rpc/releases)
 

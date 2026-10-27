@@ -28,7 +28,7 @@ The wallet has to be created first, with `create_wallet` as in [usage](usage.md#
 
 ## Functional tests
 
-The [Build](../.github/workflows/build.yml) workflow runs the python functional tests of monero-project against the binaries it built, from [Test](../.github/workflows/test.yml), on `linux/amd64` and `linux/arm64`. Run it by hand from the Actions tab with the id of a Build run and a list of tests, or `all`.
+The [Test](../.github/workflows/test.yml) workflow waits for [Build](../.github/workflows/build.yml) and runs the python functional tests of monero-project against the binaries it built, on `linux/amd64` and `linux/arm64`. Run it by hand from the Actions tab with the id of a Build run and a list of tests, or `all`.
 
 The same tests run locally on the images of `make build`:
 

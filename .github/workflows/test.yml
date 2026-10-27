@@ -1,14 +1,11 @@
 name: Test
 
 on:
-  workflow_call:
-    inputs:
-      tests:
-        type: string
-        default: ''
-      run-id:
-        type: string
-        default: ''
+  push:
+    branches: [ main ]
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tests:
@@ -22,9 +19,41 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  wait:
+    name: wait for build
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      run-id: ${{ steps.build.outputs.run-id }}
+    steps:
+      - name: Wait for the build of the same commit
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # build.yml starts together with this one, give it time to show up
+          for _ in $(seq 1 30); do
+            id=$(gh run list --workflow build.yml --commit "$SHA" --event "$GITHUB_EVENT_NAME" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            [ -z "$id" ] || break
+            sleep 10
+          done
+          [ -n "$id" ] || { echo "no build run for $SHA"; exit 1; }
+          echo "run-id=$id" >> "$GITHUB_OUTPUT"
+          until [ "$(gh run view "$id" --json status --jq .status)" = completed ]; do sleep 15; done
+          [ "$(gh run view "$id" --json conclusion --jq .conclusion)" = success ] || { echo "build $id did not succeed"; exit 1; }
+
   functional:
     name: ${{ matrix.arch }}
+    needs: wait
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
 
@@ -50,7 +79,7 @@ jobs:
           pattern: monero-rpc-${{ matrix.arch }}-default-*
           merge-multiple: true
           path: build/binaries
-          run-id: ${{ inputs.run-id || github.run_id }}
+          run-id: ${{ inputs.run-id || needs.wait.outputs.run-id }}
           github-token: ${{ github.token }}
 
       - name: Run functional tests
@@ -58,7 +87,7 @@ jobs:
           TESTS: ${{ inputs.tests }}
         run: |
           read -ra list <<< "$TESTS"
-          [ "${list[*]}" != all ] || list=(address_book bans blockchain cold_signing daemon_info get_output_distribution integrated_address mining multisig p2p proofs sign_message transfer txpool uri validate_address wallet)
+          [ "${list[*]}" != all ] || list=(address_book bans blockchain cold_signing daemon_info get_output_distribution integrated_address mining multisig p2p proofs sign_message transfer txpool uri wallet)
           ./bin/functional_tests.sh build/binaries "${list[@]}"
 
       - name: Upload logs

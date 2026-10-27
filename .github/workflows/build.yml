@@ -117,11 +117,3 @@ jobs:
           path: |
             binaries/monerod
             binaries/monero-wallet-rpc
-
-  test:
-    name: test
-    needs: linux
-    permissions:
-      contents: read
-      actions: read
-    uses: ./.github/workflows/test.yml
