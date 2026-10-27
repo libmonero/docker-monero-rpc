@@ -96,14 +96,7 @@ jobs:
         run: ./bin/smoke_test.sh monero-wallet-rpc monero-wallet-rpc:ci ${{ matrix.variant }}
 
       - name: Extract binaries
-        run: |
-          mkdir binaries
-          for name in monerod monero-wallet-rpc; do
-            image=monero-daemon-rpc:ci
-            [ "$name" = monerod ] || image=monero-wallet-rpc:ci
-            docker create --name "extract-$name" "$image" > /dev/null
-            docker cp "extract-$name:/usr/local/bin/$name" "binaries/$name"
-          done
+        run: ./bin/extract_binaries.sh monero-daemon-rpc:ci monero-wallet-rpc:ci binaries
 
       - name: Verify binaries
         run: |
@@ -124,3 +117,11 @@ jobs:
           path: |
             binaries/monerod
             binaries/monero-wallet-rpc
+
+  test:
+    name: test
+    needs: linux
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/test.yml

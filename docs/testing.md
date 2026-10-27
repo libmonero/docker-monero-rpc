@@ -26,6 +26,19 @@ curl --digest -u rpc_daemon_user:abc123 http://127.0.0.1:18081/json_rpc -H 'Cont
 
 The wallet has to be created first, with `create_wallet` as in [usage](usage.md#monero-wallet-rpc). The blocks reach node_1 through the p2p connection between the nodes. The first call can take more than a minute on a slow machine.
 
+## Functional tests
+
+The [Build](../.github/workflows/build.yml) workflow runs the python functional tests of monero-project against the binaries it built, from [Test](../.github/workflows/test.yml), on `linux/amd64` and `linux/arm64`. Run it by hand from the Actions tab with the id of a Build run and a list of tests, or `all`.
+
+The same tests run locally on the images of `make build`:
+
+```bash
+make build
+make functional TESTS="daemon_info wallet"
+```
+
+Without `TESTS` it runs `daemon_info blockchain transfer uri wallet`. The tests start 4 nodes and 6 wallets in regtest and each node that verifies blocks uses about 2.4 GB of memory, so keep the full list for a machine with 16 GB. `validate_address` looks up openalias addresses, which needs a resolver with dnssec and the runners do not have one, and `rpc_payment` needs a helper that is not built here, `all` leaves it out. Needs `python3` with `venv`.
+
 ## From lalanza808/monero
 
 What changes in a compose file that uses `lalanza808/monero`:
