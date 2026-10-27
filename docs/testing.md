@@ -28,7 +28,7 @@ The wallet has to be created first, with `create_wallet` as in [usage](usage.md#
 
 ## Functional tests
 
-The [Test](../.github/workflows/test.yml) workflow waits for [Build](../.github/workflows/build.yml) and runs the python functional tests of monero-project against the binaries it built, on `linux/amd64` and `linux/arm64`. Run it by hand from the Actions tab with the id of a Build run and a list of tests, or `all`.
+The [Test](../.github/workflows/test.yml) workflow waits for [Build](../.github/workflows/build.yml) and runs the python functional tests of monero-project against the binaries it built, on `linux/amd64` and `linux/arm64`. Run it by hand from the Actions tab with the id of a Build run and a list of tests.
 
 The same tests run locally on the images of `make build`:
 
@@ -37,7 +37,7 @@ make build
 make functional TESTS="daemon_info wallet"
 ```
 
-Without `TESTS` it runs `daemon_info blockchain transfer uri wallet`. The tests start 4 nodes and 6 wallets in regtest and each node that verifies blocks uses about 2.4 GB of memory, so keep the full list for a machine with 16 GB. `validate_address` looks up openalias addresses, which needs a resolver with dnssec and the runners do not have one, and `rpc_payment` needs a helper that is not built here, `all` leaves it out. Needs `python3` with `venv`.
+Without `TESTS` it runs all the tests but four, which takes about 15 minutes. `validate_address` and `address_book` look up openalias addresses, which needs a resolver with dnssec and the runners do not have one, `mining` and `rpc_payment` need helpers that are not built here. The tests start 4 nodes and 6 wallets in regtest and each node that verifies blocks uses about 2.4 GB of memory, so keep the full list for a machine with 16 GB. Needs `python3` with `venv`.
 
 ## From lalanza808/monero
 

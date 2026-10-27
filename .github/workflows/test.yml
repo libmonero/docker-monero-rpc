@@ -9,8 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tests:
-        description: Functional tests to run, separated by spaces, or all
-        default: daemon_info blockchain transfer uri wallet
+        description: Functional tests to run, separated by spaces, all but a few if empty
       run-id:
         description: Build run to take the binaries from
         required: true
@@ -87,7 +86,6 @@ jobs:
           TESTS: ${{ inputs.tests }}
         run: |
           read -ra list <<< "$TESTS"
-          [ "${list[*]}" != all ] || list=(address_book bans blockchain cold_signing daemon_info get_output_distribution integrated_address mining multisig p2p proofs sign_message transfer txpool uri wallet)
           ./bin/functional_tests.sh build/binaries "${list[@]}"
 
       - name: Upload logs

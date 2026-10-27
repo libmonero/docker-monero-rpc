@@ -7,7 +7,9 @@ set -euo pipefail
 BINARIES=$(cd "$1" && pwd)
 shift
 TESTS=("$@")
-[ ${#TESTS[@]} -gt 0 ] || TESTS=(daemon_info blockchain transfer uri wallet)
+# left out: validate_address and address_book look up openalias addresses and need dnssec,
+# mining and rpc_payment need helpers that are not built
+[ ${#TESTS[@]} -gt 0 ] || TESTS=(bans blockchain cold_signing daemon_info get_output_distribution integrated_address multisig p2p proofs sign_message transfer txpool uri wallet)
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SRC=$ROOT/external/monero-project/tests/functional_tests
