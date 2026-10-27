@@ -76,7 +76,7 @@ jobs:
           build-args: VARIANT=${{ matrix.variant }}
           load: true
           cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-daemon
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.variant }}-daemon
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}-daemon', matrix.arch, matrix.variant) || '' }}
 
       - name: Test monero-daemon-rpc
         run: ./bin/smoke_test.sh monero-daemon-rpc monero-daemon-rpc:ci ${{ matrix.variant }}
@@ -90,7 +90,7 @@ jobs:
           build-args: VARIANT=${{ matrix.variant }}
           load: true
           cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}-wallet', matrix.arch, matrix.variant) || '' }}
 
       - name: Test monero-wallet-rpc
         run: ./bin/smoke_test.sh monero-wallet-rpc monero-wallet-rpc:ci ${{ matrix.variant }}
