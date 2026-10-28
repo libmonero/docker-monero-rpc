@@ -44,4 +44,4 @@ The archives of the release have a `SHA256SUMS` file.
 
 ## First release
 
-Packages of the organization are private at first, make each one public from its settings page. The workflows need the permission to write packages in Settings, Actions, General, Workflow permissions.
+The first push creates the packages, private at first: make each one public from its settings page. The workflow asks for the permissions it needs by itself, the default of the repository does not matter.
