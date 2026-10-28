@@ -2,10 +2,15 @@ name: Release
 
 on:
   push:
+    branches: [ main ]
     tags: [ 'v*' ]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -14,11 +19,15 @@ jobs:
   check:
     name: check
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       monero_version: ${{ steps.version.outputs.monero_version }}
       monero_commit: ${{ steps.version.outputs.monero_commit }}
+      tags: ${{ steps.version.outputs.tags }}
       latest: ${{ steps.version.outputs.latest }}
 
     steps:
@@ -28,22 +37,44 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Check tag against monero-project
+      - name: Check the tag against monero-project
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+(\.[0-9]+){3}$ ]] || { echo "tag $GITHUB_REF_NAME is not a monero version"; exit 1; }
           monero_version=$(./bin/monero_version.sh)
-          [ "${monero_version%-*}" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME does not match monero-project $monero_version"; exit 1; }
-          highest=$(git ls-remote --tags --refs origin 'refs/tags/v*' | sed 's|.*refs/tags/||' | sort -V | tail -1)
+          version=master
+          tags=master
+          latest=false
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+              [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+(\.[0-9]+){3}-[0-9]+$ ]] || { echo "tag $GITHUB_REF_NAME is not a monero version and a release number"; exit 1; }
+              [ "${monero_version%-*}" = "${GITHUB_REF_NAME%-*}" ] || { echo "tag $GITHUB_REF_NAME does not match monero-project $monero_version"; exit 1; }
+              # the tag of the monero version moves to the highest release, latest to the highest version
+              version=${GITHUB_REF_NAME#v}
+              tags=$GITHUB_REF_NAME
+              releases=$(git ls-remote --tags --refs origin "refs/tags/${GITHUB_REF_NAME%-*}-*" | sed 's|.*refs/tags/||' | sort -V)
+              [ "$(tail -1 <<< "$releases")" != "$GITHUB_REF_NAME" ] || tags="$tags ${GITHUB_REF_NAME%-*}"
+              highest=$(git ls-remote --tags --refs origin 'refs/tags/v*' | sed 's|.*refs/tags/||' | sort -V | tail -1)
+              [ "$highest" != "$GITHUB_REF_NAME" ] || latest=true
+          fi
           {
-            echo "version=${GITHUB_REF_NAME#v}"
-            echo "monero_version=$monero_version"
-            echo "monero_commit=$(git -C external/monero-project rev-parse HEAD)"
-            echo "latest=$([ "$highest" = "$GITHUB_REF_NAME" ] && echo true || echo false)"
+              echo "version=$version"
+              echo "monero_version=$monero_version"
+              echo "monero_commit=$(git -C external/monero-project rev-parse HEAD)"
+              echo "tags=$tags"
+              echo "latest=$latest"
           } >> "$GITHUB_OUTPUT"
 
+      # the commit has to pass Build and Test, which waits for Build
+      - name: Wait for the tests of the commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: ./bin/wait_for_run.sh test.yml "$GITHUB_SHA" push
+
   build:
-    name: ${{ matrix.arch }}
+    name: ${{ matrix.arch }} ${{ matrix.variant }}
     needs: check
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -54,6 +85,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ ubuntu-24.04, ubuntu-24.04-arm ]
+        variant: [ default, private-testnet ]
         include:
           - os: ubuntu-24.04
             arch: linux-x86_64
@@ -83,7 +116,9 @@ jobs:
         with:
           context: .
           target: monero-daemon-rpc
-          build-args: NPROC=3
+          build-args: |
+            VARIANT=${{ matrix.variant }}
+            NPROC=3
           outputs: type=image,"name=${{ env.REGISTRY }}/monero-daemon-rpc",push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.version=${{ needs.check.outputs.version }}
@@ -92,8 +127,7 @@ jobs:
             io.libmonero.monero-commit=${{ needs.check.outputs.monero_commit }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-daemon
 
       - name: Build and push monero-wallet-rpc
         id: monero-wallet-rpc
@@ -101,7 +135,9 @@ jobs:
         with:
           context: .
           target: monero-wallet-rpc
-          build-args: NPROC=3
+          build-args: |
+            VARIANT=${{ matrix.variant }}
+            NPROC=3
           outputs: type=image,"name=${{ env.REGISTRY }}/monero-wallet-rpc",push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.version=${{ needs.check.outputs.version }}
@@ -110,14 +146,14 @@ jobs:
             io.libmonero.monero-commit=${{ needs.check.outputs.monero_commit }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet
 
       - name: Test pushed images
         run: |
-          ./bin/smoke_test.sh monero-daemon-rpc "$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST"
-          ./bin/smoke_test.sh monero-wallet-rpc "$REGISTRY/monero-wallet-rpc@$WALLET_DIGEST"
+          ./bin/smoke_test.sh monero-daemon-rpc "$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST" "$VARIANT"
+          ./bin/smoke_test.sh monero-wallet-rpc "$REGISTRY/monero-wallet-rpc@$WALLET_DIGEST" "$VARIANT"
         env:
+          VARIANT: ${{ matrix.variant }}
           DAEMON_DIGEST: ${{ steps.monero-daemon-rpc.outputs.digest }}
           WALLET_DIGEST: ${{ steps.monero-wallet-rpc.outputs.digest }}
 
@@ -133,12 +169,12 @@ jobs:
       - name: Upload digests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: digests-${{ matrix.arch }}
+          name: digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: digests/*
           retention-days: 1
 
   publish:
-    name: publish
+    name: publish ${{ matrix.variant }}
     needs: [check, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -147,11 +183,16 @@ jobs:
       packages: write
       id-token: write
 
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ default, private-testnet ]
+
     steps:
       - name: Download digests
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: digests-*
+          pattern: digests-${{ matrix.variant }}-*
           path: digests
           merge-multiple: true
 
@@ -165,26 +206,48 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # the tags of a variant are prefixed with its name, its latest is the name
+      - name: Name the tags
+        id: tags
+        run: |
+          prefix=
+          [ "$VARIANT" = default ] || prefix="$VARIANT-"
+          list=
+          for tag in $TAGS; do list="$list $prefix$tag"; done
+          if [ "$LATEST" = true ]; then
+              if [ "$VARIANT" = default ]; then list="$list latest"; else list="$list $VARIANT"; fi
+          fi
+          list=${list# }
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "first=${list%% *}" >> "$GITHUB_OUTPUT"
+        env:
+          VARIANT: ${{ matrix.variant }}
+          TAGS: ${{ needs.check.outputs.tags }}
+          LATEST: ${{ needs.check.outputs.latest }}
+
       - name: Create manifests
         run: |
           for image in monero-daemon-rpc monero-wallet-rpc; do
+            args=()
+            for tag in $TAGS; do args+=(-t "$REGISTRY/$image:$tag"); done
             # shellcheck disable=SC2046
-            docker buildx imagetools create -t "$REGISTRY/$image:$VERSION" \
+            docker buildx imagetools create "${args[@]}" \
               $(printf "$REGISTRY/$image@sha256:%s " $(ls "digests/$image"))
           done
         env:
-          VERSION: ${{ needs.check.outputs.version }}
+          TAGS: ${{ steps.tags.outputs.list }}
 
+      # master is only reported, a release has to be clean
       - name: Scan monero-daemon-rpc
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_USERNAME: ${{ github.repository_owner }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
-          image-ref: ${{ env.REGISTRY }}/monero-daemon-rpc:${{ needs.check.outputs.version }}
+          image-ref: ${{ env.REGISTRY }}/monero-daemon-rpc:${{ steps.tags.outputs.first }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: 1
+          exit-code: ${{ github.ref_type == 'tag' && '1' || '0' }}
 
       - name: Scan monero-wallet-rpc
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -192,19 +255,10 @@ jobs:
           TRIVY_USERNAME: ${{ github.repository_owner }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
-          image-ref: ${{ env.REGISTRY }}/monero-wallet-rpc:${{ needs.check.outputs.version }}
+          image-ref: ${{ env.REGISTRY }}/monero-wallet-rpc:${{ steps.tags.outputs.first }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: 1
-
-      - name: Tag latest
-        if: needs.check.outputs.latest == 'true'
-        run: |
-          for image in monero-daemon-rpc monero-wallet-rpc; do
-            docker buildx imagetools create -t "$REGISTRY/$image:latest" "$REGISTRY/$image:$VERSION"
-          done
-        env:
-          VERSION: ${{ needs.check.outputs.version }}
+          exit-code: ${{ github.ref_type == 'tag' && '1' || '0' }}
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -212,14 +266,15 @@ jobs:
       - name: Sign manifests
         run: |
           for image in monero-daemon-rpc monero-wallet-rpc; do
-            digest=$(docker buildx imagetools inspect "$REGISTRY/$image:$VERSION" --format '{{.Manifest.Digest}}')
+            digest=$(docker buildx imagetools inspect "$REGISTRY/$image:$FIRST" --format '{{.Manifest.Digest}}')
             cosign sign --yes "$REGISTRY/$image@$digest"
           done
         env:
-          VERSION: ${{ needs.check.outputs.version }}
+          FIRST: ${{ steps.tags.outputs.first }}
 
   release:
     name: release
+    if: github.ref_type == 'tag'
     needs: [check, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -238,23 +293,25 @@ jobs:
       - name: Package binaries
         run: |
           mkdir release
-          for platform in linux/amd64:linux-x86_64 linux/arm64:linux-arm64; do
-            arch=${platform#*:}
-            staging="monero-rpc-$GITHUB_REF_NAME-$arch"
-            mkdir "$staging"
-            for pair in monero-daemon-rpc:monerod monero-wallet-rpc:monero-wallet-rpc; do
-              id=$(docker create --platform "${platform%:*}" "$REGISTRY/${pair%:*}:$VERSION")
-              docker cp "$id:/usr/local/bin/${pair#*:}" "$staging/"
-              docker cp "$id:/usr/share/licenses/monero-project/LICENSE" "$staging/LICENSE"
-              docker rm "$id" > /dev/null
+          for variant in default private-testnet; do
+            prefix=
+            [ "$variant" = default ] || prefix="$variant-"
+            for platform in linux/amd64:linux-x86_64 linux/arm64:linux-arm64; do
+              arch=${platform#*:}
+              staging="monero-rpc-$prefix$GITHUB_REF_NAME-$arch"
+              mkdir "$staging"
+              for pair in monero-daemon-rpc:monerod monero-wallet-rpc:monero-wallet-rpc; do
+                id=$(docker create --platform "${platform%:*}" "$REGISTRY/${pair%:*}:$prefix$GITHUB_REF_NAME")
+                docker cp "$id:/usr/local/bin/${pair#*:}" "$staging/"
+                docker cp "$id:/usr/share/licenses/monero-project/LICENSE" "$staging/LICENSE"
+                docker rm "$id" > /dev/null
+              done
+              tar czf "release/$staging.tar.gz" "$staging"
             done
-            tar czf "release/$staging.tar.gz" "$staging"
           done
           cd release
           sha256sum ./*.tar.gz > SHA256SUMS
           cat SHA256SUMS
-        env:
-          VERSION: ${{ needs.check.outputs.version }}
 
       - name: Attach archives to release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -265,6 +322,6 @@ jobs:
           draft: true
           body: |
             ```
-            docker pull ${{ env.REGISTRY }}/monero-daemon-rpc:${{ needs.check.outputs.version }}
-            docker pull ${{ env.REGISTRY }}/monero-wallet-rpc:${{ needs.check.outputs.version }}
+            docker pull ${{ env.REGISTRY }}/monero-daemon-rpc:${{ github.ref_name }}
+            docker pull ${{ env.REGISTRY }}/monero-wallet-rpc:${{ github.ref_name }}
             ```
