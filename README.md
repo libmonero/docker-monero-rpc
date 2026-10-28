@@ -33,6 +33,7 @@ The `private-testnet` variant is built with a [patch](patches/private-testnet.pa
 
 * [Building](docs/building.md)
 * [Usage](docs/usage.md)
+* [Releases](docs/releases.md)
 * [Security](docs/security.md)
 * [Tests](docs/testing.md), with a regtest [compose file](examples/regtest/docker-compose.yml)
 * [Private testnet](docs/private-testnet.md), with a [compose file](examples/private-testnet/docker-compose.yml)
