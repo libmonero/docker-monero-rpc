@@ -31,23 +31,18 @@ jobs:
     outputs:
       run-id: ${{ steps.build.outputs.run-id }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
       - name: Wait for the build of the same commit
         id: build
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          # build.yml starts together with this one, give it time to show up
-          for _ in $(seq 1 30); do
-            id=$(gh run list --workflow build.yml --commit "$SHA" --event "$GITHUB_EVENT_NAME" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-            [ -z "$id" ] || break
-            sleep 10
-          done
-          [ -n "$id" ] || { echo "no build run for $SHA"; exit 1; }
-          echo "run-id=$id" >> "$GITHUB_OUTPUT"
-          until [ "$(gh run view "$id" --json status --jq .status)" = completed ]; do sleep 15; done
-          [ "$(gh run view "$id" --json conclusion --jq .conclusion)" = success ] || { echo "build $id did not succeed"; exit 1; }
+        run: echo "run-id=$(./bin/wait_for_run.sh build.yml "$SHA" "$GITHUB_EVENT_NAME")" >> "$GITHUB_OUTPUT"
 
   functional:
     name: ${{ matrix.arch }}
