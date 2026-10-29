@@ -1,0 +1,172 @@
+import os
+import subprocess
+import time
+import uuid
+from typing import Any, NamedTuple
+
+import pytest
+import requests
+
+from monero_daemon_light import MoneroDaemonLight
+
+# blocks made before the tests, the last hardfork of the private testnet is at height 150
+BLOCKS = {"default": 20, "private-testnet": 160}
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption("--variant", default="default", choices=list(BLOCKS), help="variant of the images")
+    parser.addoption("--daemon-image", default=os.environ.get("MONERO_DAEMON_IMAGE"), help="monero-daemon-rpc image")
+    parser.addoption("--wallet-image", default=os.environ.get("MONERO_WALLET_IMAGE"), help="monero-wallet-rpc image")
+    parser.addoption("--light-image", default=os.environ.get("MONERO_LIGHT_IMAGE"), help="monero-wallet-light image")
+
+
+def docker(*args: str, check: bool = True) -> str:
+    return subprocess.run(["docker", *args], capture_output=True, text=True, check=check).stdout.strip()
+
+
+class Account(NamedTuple):
+    address: str
+    view_key: str
+
+
+class Stack:
+    """A node, a wallet and a light wallet server on a docker network of their own.
+
+    Regtest is used by the default variant and the testnet by private-testnet, the ports
+    that tests talk to are published to localhost on free ports."""
+
+    def __init__(self, variant: str, daemon_image: str, wallet_image: str, light_image: str) -> None:
+        self.variant = variant
+        self.images = {"node": daemon_image, "wallet": wallet_image, "light": light_image}
+        self.network = f"light-tests-{uuid.uuid4().hex[:8]}"
+        self.light: MoneroDaemonLight
+        self.net_args = {
+            "default": {"node": ["--regtest", "--fixed-difficulty=1"], "wallet": [], "light": ["--regtest"]},
+            "private-testnet": {"node": ["--testnet", "--fixed-difficulty=1"], "wallet": ["--testnet"], "light": ["--testnet"]},
+        }[variant]
+
+    def name(self, service: str) -> str:
+        return f"{self.network}-{service}"
+
+    def run(self, service: str, args: list[str], ports: list[int]) -> None:
+        publish = [arg for port in ports for arg in ("--publish", f"127.0.0.1::{port}")]
+        docker("run", "-d", "--name", self.name(service), "--network", self.network, "--health-interval=5s",
+               "--health-start-period=5s", *publish, self.images[service], *args)
+
+    def wait_healthy(self, service: str, timeout: float = 120.0) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if docker("inspect", "-f", "{{.State.Health.Status}}", self.name(service)) == "healthy":
+                return
+            time.sleep(2)
+        raise RuntimeError(f"{service} did not become healthy\n{self.logs(service)}")
+
+    def logs(self, service: str) -> str:
+        return docker("logs", "--tail", "30", self.name(service), check=False)
+
+    def url(self, service: str, port: int) -> str:
+        return docker("port", self.name(service), f"{port}/tcp").splitlines()[0]
+
+    def start_node(self) -> None:
+        self.run("node", [*self.net_args["node"], "--offline", "--no-igd", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081",
+                          "--confirm-external-bind", "--zmq-rpc-bind-ip=0.0.0.0", "--zmq-rpc-bind-port=18082",
+                          "--confirm-zmq-rpc-external-bind", "--zmq-pub=tcp://0.0.0.0:18083"], [18081, 18083])
+        self.wait_healthy("node")
+        self.node_url = f"http://{self.url('node', 18081)}"
+        self.node_zmq = f"tcp://{self.url('node', 18083)}"
+
+    def start_wallet(self) -> None:
+        self.run("wallet", [*self.net_args["wallet"], "--offline", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18084",
+                            "--confirm-external-bind", "--disable-rpc-login", "--wallet-dir=/home/monero/wallets",
+                            "--log-file=/dev/null"], [18084])
+        self.wait_healthy("wallet")
+        self.wallet_url = f"http://{self.url('wallet', 18084)}"
+
+    def start_light(self) -> None:
+        self.run("light", [*self.net_args["light"], f"--daemon=tcp://{self.name('node')}:18082",
+                           f"--sub=tcp://{self.name('node')}:18083", "--zmq-pub=tcp://0.0.0.0:18090",
+                           "--rest-server=http://0.0.0.0:8443", "--admin-rest-server=http://0.0.0.0:8444",
+                           "--disable-admin-auth", "--confirm-external-bind", "--auto-accept-creation",
+                           "--max-subaddresses=1000", "--log-level=1"], [8443, 8444, 18090])
+        self.wait_healthy("light")
+        self.light = MoneroDaemonLight(uri=f"http://{self.url('light', 8443)}", admin_uri=f"http://{self.url('light', 8444)}")
+        self.light_zmq = f"tcp://{self.url('light', 18090)}"
+
+    def start(self) -> None:
+        docker("network", "create", self.network)
+        self.start_node()
+        self.start_wallet()
+        self.start_light()
+
+    def stop(self) -> None:
+        for service in self.images:
+            docker("rm", "-fv", self.name(service), check=False)
+        docker("network", "rm", self.network, check=False)
+
+    @staticmethod
+    def json_rpc(url: str, method: str, **params: Any) -> Any:
+        response = requests.post(f"{url}/json_rpc", json={"jsonrpc": "2.0", "id": "0", "method": method, "params": params}, timeout=120)
+        response.raise_for_status()
+        body = response.json()
+        assert "error" not in body, body["error"]
+        return body["result"]
+
+    def new_account(self, name: str) -> Account:
+        """Create a wallet and return its keys."""
+        self.json_rpc(self.wallet_url, "create_wallet", filename=name, password="", language="English")
+        address = self.json_rpc(self.wallet_url, "get_address")["address"]
+        view_key = self.json_rpc(self.wallet_url, "query_key", key_type="view_key")["key"]
+        return Account(address, view_key)
+
+    def node_height(self) -> int:
+        return requests.get(f"{self.node_url}/get_height", timeout=30).json()["height"]
+
+    def mine(self, blocks: int, address: str) -> int:
+        """Make blocks for an address and return the height of the node."""
+        target = self.node_height() + blocks
+        if self.variant == "default":
+            self.json_rpc(self.node_url, "generateblocks", wallet_address=address, amount_of_blocks=blocks)
+        else:
+            requests.post(f"{self.node_url}/start_mining", timeout=30, json={
+                "miner_address": address, "threads_count": 1, "do_background_mining": False, "ignore_battery": True}).raise_for_status()
+            deadline = time.monotonic() + 120
+            while self.node_height() < target and time.monotonic() < deadline:
+                time.sleep(1)
+            requests.post(f"{self.node_url}/stop_mining", timeout=30).raise_for_status()
+        return self.node_height()
+
+
+@pytest.fixture(scope="session")
+def variant(request: pytest.FixtureRequest) -> str:
+    return request.config.getoption("--variant")
+
+
+@pytest.fixture(scope="session")
+def stack(request: pytest.FixtureRequest, variant: str):
+    images = [request.config.getoption(f"--{name}-image") for name in ("daemon", "wallet", "light")]
+    if not all(images):
+        pytest.fail("the images are needed: --daemon-image, --wallet-image and --light-image")
+    stack = Stack(variant, *images)
+    try:
+        stack.start()
+        yield stack
+    finally:
+        if request.session.testsfailed:
+            for service in stack.images:
+                print(f"--- {service}\n{stack.logs(service)}")
+        stack.stop()
+
+
+@pytest.fixture(scope="session")
+def light(stack: Stack) -> MoneroDaemonLight:
+    return stack.light
+
+
+@pytest.fixture(scope="session")
+def account(stack: Stack, variant: str) -> Account:
+    """An account of the light wallet server that has been mined to and scanned."""
+    account = stack.new_account("miner")
+    stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
+    height = stack.mine(BLOCKS[variant], account.address)
+    stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
+    return account
