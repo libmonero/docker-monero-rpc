@@ -28,6 +28,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       monero_version: ${{ steps.version.outputs.monero_version }}
       monero_commit: ${{ steps.version.outputs.monero_commit }}
+      lws_version: ${{ steps.version.outputs.lws_version }}
+      lws_commit: ${{ steps.version.outputs.lws_commit }}
       tags: ${{ steps.version.outputs.tags }}
       latest: ${{ steps.version.outputs.latest }}
 
@@ -63,6 +65,8 @@ jobs:
               echo "version=$version"
               echo "monero_version=$monero_version"
               echo "monero_commit=$(git -C external/monero-project rev-parse HEAD)"
+              echo "lws_version=$(sed -n 's/.*id\[\] = "\(.*\)";/\1/p' external/monero-lws/src/lws_version.h.in)"
+              echo "lws_commit=$(git -C external/monero-lws rev-parse HEAD)"
               echo "tags=$tags"
               echo "latest=$latest"
           } >> "$GITHUB_OUTPUT"
@@ -99,7 +103,10 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-          submodules: recursive
+          submodules: true
+
+      - name: Initialize submodules
+        run: ./bin/update_submodules.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -149,23 +156,48 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet
 
+      - name: Build and push monero-wallet-light
+        id: monero-wallet-light
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: monero-wallet-light
+          build-args: |
+            VARIANT=${{ matrix.variant }}
+            NPROC=3
+          outputs: type=image,"name=${{ env.REGISTRY }}/monero-wallet-light",push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            io.libmonero.monero-version=${{ needs.check.outputs.monero_version }}
+            io.libmonero.monero-commit=${{ needs.check.outputs.monero_commit }}
+            io.libmonero.lws-version=${{ needs.check.outputs.lws_version }}
+            io.libmonero.lws-commit=${{ needs.check.outputs.lws_commit }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet-light
+
       - name: Test pushed images
         run: |
           ./bin/smoke_test.sh monero-daemon-rpc "$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST" "$VARIANT"
           ./bin/smoke_test.sh monero-wallet-rpc "$REGISTRY/monero-wallet-rpc@$WALLET_DIGEST" "$VARIANT"
+          ./bin/smoke_test.sh monero-wallet-light "$REGISTRY/monero-wallet-light@$LIGHT_DIGEST" "$VARIANT"
         env:
           VARIANT: ${{ matrix.variant }}
           DAEMON_DIGEST: ${{ steps.monero-daemon-rpc.outputs.digest }}
           WALLET_DIGEST: ${{ steps.monero-wallet-rpc.outputs.digest }}
+          LIGHT_DIGEST: ${{ steps.monero-wallet-light.outputs.digest }}
 
       - name: Export digests
         run: |
-          mkdir -p digests/monero-daemon-rpc digests/monero-wallet-rpc
+          mkdir -p digests/monero-daemon-rpc digests/monero-wallet-rpc digests/monero-wallet-light
           touch "digests/monero-daemon-rpc/${DAEMON_DIGEST#sha256:}"
           touch "digests/monero-wallet-rpc/${WALLET_DIGEST#sha256:}"
+          touch "digests/monero-wallet-light/${LIGHT_DIGEST#sha256:}"
         env:
           DAEMON_DIGEST: ${{ steps.monero-daemon-rpc.outputs.digest }}
           WALLET_DIGEST: ${{ steps.monero-wallet-rpc.outputs.digest }}
+          LIGHT_DIGEST: ${{ steps.monero-wallet-light.outputs.digest }}
 
       - name: Upload digests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -228,7 +260,7 @@ jobs:
 
       - name: Create manifests
         run: |
-          for image in monero-daemon-rpc monero-wallet-rpc; do
+          for image in monero-daemon-rpc monero-wallet-rpc monero-wallet-light; do
             args=()
             for tag in $TAGS; do args+=(-t "$REGISTRY/$image:$tag"); done
             # shellcheck disable=SC2046
@@ -261,12 +293,23 @@ jobs:
           ignore-unfixed: true
           exit-code: ${{ github.ref_type == 'tag' && '1' || '0' }}
 
+      - name: Scan monero-wallet-light
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.repository_owner }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ env.REGISTRY }}/monero-wallet-light:${{ steps.tags.outputs.first }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: ${{ github.ref_type == 'tag' && '1' || '0' }}
+
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign manifests
         run: |
-          for image in monero-daemon-rpc monero-wallet-rpc; do
+          for image in monero-daemon-rpc monero-wallet-rpc monero-wallet-light; do
             digest=$(docker buildx imagetools inspect "$REGISTRY/$image:$FIRST" --format '{{.Manifest.Digest}}')
             cosign sign --yes "$REGISTRY/$image@$digest"
           done
@@ -301,10 +344,11 @@ jobs:
               arch=${platform#*:}
               staging="monero-rpc-$prefix$GITHUB_REF_NAME-$arch"
               mkdir "$staging"
-              for pair in monero-daemon-rpc:monerod monero-wallet-rpc:monero-wallet-rpc; do
+              for pair in monero-daemon-rpc:monerod monero-wallet-rpc:monero-wallet-rpc monero-wallet-light:monero-lws-daemon monero-wallet-light:monero-lws-admin; do
                 id=$(docker create --platform "${platform%:*}" "$REGISTRY/${pair%:*}:$prefix$GITHUB_REF_NAME")
                 docker cp "$id:/usr/local/bin/${pair#*:}" "$staging/"
                 docker cp "$id:/usr/share/licenses/monero-project/LICENSE" "$staging/LICENSE"
+                [ "${pair%:*}" != monero-wallet-light ] || docker cp "$id:/usr/share/licenses/monero-lws/LICENSE" "$staging/LICENSE-monero-lws"
                 docker rm "$id" > /dev/null
               done
               tar czf "release/$staging.tar.gz" "$staging"
