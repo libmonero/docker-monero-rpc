@@ -93,13 +93,12 @@ class Stack:
                            "--max-subaddresses=1000", "--log-level=1"], [8443, 8444, 18090])
         self.wait_healthy("light")
         self.light = MoneroDaemonLight(uri=f"http://{self.url('light', 8443)}", admin_uri=f"http://{self.url('light', 8444)}")
-        self.wait_synced()
         self.light_zmq = f"tcp://{self.url('light', 18090)}"
 
     def wait_synced(self, timeout: float = 60.0) -> None:
-        """Wait for the first sync of the light wallet server.
+        """Wait for the first sync of the light wallet server, which only starts with an account.
 
-        Its database starts at the last checkpoint of mainnet, an account created before the sync starts there.
+        Its database starts at the last checkpoint of mainnet, an account is rolled back from there to the node.
         """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -184,6 +183,7 @@ def account(stack: Stack, variant: str) -> Account:
     """An account of the light wallet server that has been mined to and scanned."""
     account = stack.new_account("miner")
     stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
+    stack.wait_synced()
     height = stack.mine(BLOCKS[variant], account.address)
     stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
     return account
