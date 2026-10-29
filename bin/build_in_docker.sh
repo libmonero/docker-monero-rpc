@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 
-# usage: build_in_docker.sh <target> <binary> <output>
+# usage: build_in_docker.sh <daemon|wallet_rpc_server|lws> <output directory>
 # builds in the docker build stages, on a throwaway copy of the sources without
 # git metadata: the version tag is in /version and VARIANT names a patch to apply
 set -euo pipefail
 
 TARGET=$1
-BINARY=$2
-OUTPUT=$3
+OUTPUT=$2
 VARIANT=${VARIANT:-default}
 TAG=$(cat /version)
 
 cd /src
-rm external/monero-project/.git
+rm -f external/*/.git
 
 [ "$VARIANT" = default ] || git -C external/monero-project apply "/src/patches/$VARIANT.patch"
 
@@ -22,6 +21,23 @@ release=false
 sed "s/@VERSIONTAG@/$TAG/;s/@VERSION_IS_RELEASE@/$release/" external/monero-project/src/version.cpp.in > external/monero-project/src/version.cpp.in.new
 mv external/monero-project/src/version.cpp.in.new external/monero-project/src/version.cpp.in
 
-MANUAL_SUBMODULES=1 ./bin/build_monero_rpc.sh "$TARGET"
+case $TARGET in
+    daemon)
+        MANUAL_SUBMODULES=1 ./bin/build_monero_rpc.sh daemon
+        binaries=(external/monero-project/build/release/bin/monerod) ;;
+    wallet_rpc_server)
+        MANUAL_SUBMODULES=1 ./bin/build_monero_rpc.sh wallet_rpc_server
+        binaries=(external/monero-project/build/release/bin/monero-wallet-rpc) ;;
+    lws)
+        ./bin/build_monero_lws.sh
+        binaries=(external/monero-lws/build/src/monero-lws-daemon external/monero-lws/build/src/monero-lws-admin) ;;
+    *)
+        echo "unknown target $TARGET" >&2
+        exit 1 ;;
+esac
 ccache --show-stats
-strip --strip-unneeded -o "$OUTPUT" "external/monero-project/build/release/bin/$BINARY"
+
+mkdir -p "$OUTPUT"
+for binary in "${binaries[@]}"; do
+    strip --strip-unneeded -o "$OUTPUT/${binary##*/}" "$binary"
+done

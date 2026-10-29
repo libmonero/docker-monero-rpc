@@ -1,6 +1,7 @@
 # .git is kept: monero-project reads its version from it
 /build/
 /external/monero-project/build/
+/external/monero-lws/build/
 /.github/
 /ccache/
 /scratch/

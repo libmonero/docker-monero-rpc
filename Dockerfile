@@ -40,9 +40,9 @@ ARG VARIANT=default
 RUN --mount=type=bind,source=bin/build_monero_rpc.sh,target=/src/bin/build_monero_rpc.sh \
     --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
     --mount=type=bind,source=patches,target=/src/patches \
-    --mount=type=bind,source=external,target=/src/external,rw \
+    --mount=type=bind,source=external/monero-project,target=/src/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
-    /src/bin/build_in_docker.sh daemon monerod /monerod
+    /src/bin/build_in_docker.sh daemon /out
 
 FROM build AS build-monero-wallet-rpc
 
@@ -52,9 +52,23 @@ ARG VARIANT=default
 RUN --mount=type=bind,source=bin/build_monero_rpc.sh,target=/src/bin/build_monero_rpc.sh \
     --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
     --mount=type=bind,source=patches,target=/src/patches \
-    --mount=type=bind,source=external,target=/src/external,rw \
+    --mount=type=bind,source=external/monero-project,target=/src/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
-    /src/bin/build_in_docker.sh wallet_rpc_server monero-wallet-rpc /monero-wallet-rpc
+    /src/bin/build_in_docker.sh wallet_rpc_server /out
+
+# monero-lws is built on the same monero-project, with its patch
+FROM build AS build-monero-wallet-light
+
+COPY --from=version /version /version
+
+ARG VARIANT=default
+RUN --mount=type=bind,source=bin/build_monero_lws.sh,target=/src/bin/build_monero_lws.sh \
+    --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
+    --mount=type=bind,source=patches,target=/src/patches \
+    --mount=type=bind,source=external/monero-project,target=/src/external/monero-project,rw \
+    --mount=type=bind,source=external/monero-lws,target=/src/external/monero-lws,rw \
+    --mount=type=cache,target=/ccache \
+    /src/bin/build_in_docker.sh lws /out
 
 ###################
 # runtime
@@ -86,7 +100,7 @@ WORKDIR /home/monero
 
 FROM runtime AS monero-daemon-rpc
 
-COPY --from=build-monero-daemon-rpc /monerod /usr/local/bin/monerod
+COPY --from=build-monero-daemon-rpc /out/monerod /usr/local/bin/monerod
 COPY --chmod=0755 docker/healthcheck-monerod.sh /usr/local/bin/healthcheck.sh
 
 LABEL org.opencontainers.image.title="monero-daemon-rpc" \
@@ -111,7 +125,7 @@ ENTRYPOINT ["monerod", "--non-interactive"]
 
 FROM runtime AS monero-wallet-rpc
 
-COPY --from=build-monero-wallet-rpc /monero-wallet-rpc /usr/local/bin/monero-wallet-rpc
+COPY --from=build-monero-wallet-rpc /out/monero-wallet-rpc /usr/local/bin/monero-wallet-rpc
 COPY --chmod=0755 docker/healthcheck-monero-wallet-rpc.sh /usr/local/bin/healthcheck.sh
 
 LABEL org.opencontainers.image.title="monero-wallet-rpc" \
@@ -129,3 +143,29 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s CMD healthcheck.sh
 
 # everything else is up to the user, as arguments or in a config file
 ENTRYPOINT ["monero-wallet-rpc"]
+
+###################
+# monero-wallet-light
+###################
+
+FROM runtime AS monero-wallet-light
+
+COPY --from=build-monero-wallet-light /out/monero-lws-daemon /out/monero-lws-admin /usr/local/bin/
+COPY --chmod=0755 docker/healthcheck-monero-wallet-light.sh /usr/local/bin/healthcheck.sh
+
+LABEL org.opencontainers.image.title="monero-wallet-light" \
+      org.opencontainers.image.description="monero-lws light wallet server built against woodser/monero"
+
+# the database is in .bitmonero/light_wallet_server
+RUN install -d -o monero -g monero /home/monero/.bitmonero
+USER 1000:1000
+
+VOLUME /home/monero/.bitmonero
+
+# rest, the admin rest server has no default bind port
+EXPOSE 8443
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s CMD healthcheck.sh
+
+# everything else is up to the user, as arguments or in a config file
+ENTRYPOINT ["monero-lws-daemon"]
