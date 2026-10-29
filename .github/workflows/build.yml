@@ -39,7 +39,10 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-          submodules: recursive
+          submodules: true
+
+      - name: Initialize submodules
+        run: ./bin/update_submodules.sh
 
       - name: Set short commit hash
         run: |
@@ -95,13 +98,30 @@ jobs:
       - name: Test monero-wallet-rpc
         run: ./bin/smoke_test.sh monero-wallet-rpc monero-wallet-rpc:ci ${{ matrix.variant }}
 
+      - name: Build monero-wallet-light
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: monero-wallet-light
+          tags: monero-wallet-light:ci
+          build-args: VARIANT=${{ matrix.variant }}
+          load: true
+          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet-light
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}-wallet-light', matrix.arch, matrix.variant) || '' }}
+
+      - name: Test monero-wallet-light
+        run: ./bin/smoke_test.sh monero-wallet-light monero-wallet-light:ci ${{ matrix.variant }}
+
       - name: Extract binaries
-        run: ./bin/extract_binaries.sh monero-daemon-rpc:ci monero-wallet-rpc:ci binaries
+        run: |
+          ./bin/extract_binaries.sh binaries monero-daemon-rpc:ci monerod
+          ./bin/extract_binaries.sh binaries monero-wallet-rpc:ci monero-wallet-rpc
+          ./bin/extract_binaries.sh binaries monero-wallet-light:ci monero-lws-daemon monero-lws-admin
 
       - name: Verify binaries
         run: |
           cd binaries
-          for bin in monerod monero-wallet-rpc; do
+          for bin in monerod monero-wallet-rpc monero-lws-daemon monero-lws-admin; do
             file "$bin"
             file "$bin" | grep -q '${{ matrix.filearch }}' || { echo "wrong architecture: $(file "$bin")"; exit 1; }
             file "$bin" | grep -qE 'statically linked|static-pie linked' || { echo "$bin is not statically linked"; exit 1; }
@@ -117,3 +137,5 @@ jobs:
           path: |
             binaries/monerod
             binaries/monero-wallet-rpc
+            binaries/monero-lws-daemon
+            binaries/monero-lws-admin
