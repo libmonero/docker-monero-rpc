@@ -111,6 +111,8 @@ jobs:
 
       - name: Test monero-wallet-light
         run: ./bin/smoke_test.sh monero-wallet-light monero-wallet-light:ci ${{ matrix.variant }}
+        env:
+          DAEMON_IMAGE: monero-daemon-rpc:ci
 
       - name: Run the tests of monero-wallet-light
         run: ./bin/wallet_light_tests.sh monero-daemon-rpc:ci monero-wallet-rpc:ci monero-wallet-light:ci ${{ matrix.variant }}

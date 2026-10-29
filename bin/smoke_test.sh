@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # usage: smoke_test.sh <monero-daemon-rpc|monero-wallet-rpc|monero-wallet-light> <image> [default|private-testnet]
+# monero-wallet-light exits without a node to follow, DAEMON_IMAGE is the monero-daemon-rpc image to start one from
 set -euo pipefail
 
 NAME=$1
@@ -9,6 +10,8 @@ VARIANT=${3:-default}
 VERSION=$("$(dirname "$0")/monero_version.sh")
 LWS_VERSION=$(sed -n 's/.*id\[\] = "\(.*\)";/\1/p' "$(dirname "$0")/../external/monero-lws/src/lws_version.h.in")
 CONTAINER=smoke-test-$$
+NODE=$CONTAINER-node
+NETWORK=$CONTAINER
 HARDENED=(--read-only --cap-drop ALL --security-opt no-new-privileges)
 OPTS=()
 CONFIG=$(mktemp)
@@ -16,7 +19,8 @@ CONFIG=$(mktemp)
 chmod 644 "$CONFIG"
 
 cleanup() {
-    docker rm -fv "$CONTAINER" > /dev/null 2>&1 || true
+    docker rm -fv "$CONTAINER" "$NODE" > /dev/null 2>&1 || true
+    docker network rm "$NETWORK" > /dev/null 2>&1 || true
     rm -f "$CONFIG"
 }
 trap cleanup EXIT
@@ -45,11 +49,11 @@ hard_fork_height() {
 }
 
 wait_healthy() {
-    local status
+    local status container=${1:-$CONTAINER}
     for _ in $(seq 1 24); do
-        status=$(docker inspect -f '{{.State.Status}} {{.State.Health.Status}}' "$CONTAINER")
+        status=$(docker inspect -f '{{.State.Status}} {{.State.Health.Status}}' "$container")
         [ "$status" != "running healthy" ] || return 0
-        [ "${status%% *}" = running ] || fail "container is $status"
+        [ "${status%% *}" = running ] || fail "$container is $status"
         sleep 5
     done
     fail "container did not become healthy: $status"
@@ -130,18 +134,26 @@ case $NAME in
         stop
         ;;
     monero-wallet-light)
-        # no daemon to follow, the rest server has to be up anyway
-        start "" --rest-server=http://0.0.0.0:8443 --confirm-external-bind --regtest --log-level=1
+        [ -n "${DAEMON_IMAGE:-}" ] || fail "set DAEMON_IMAGE to the monero-daemon-rpc image"
+        docker network create "$NETWORK" > /dev/null
+        docker run -d --name "$NODE" --network "$NETWORK" --health-interval=5s --health-start-period=5s "$DAEMON_IMAGE" \
+            --regtest --offline --no-igd --rpc-bind-ip=0.0.0.0 --rpc-bind-port=18081 --confirm-external-bind \
+            --zmq-rpc-bind-ip=0.0.0.0 --zmq-rpc-bind-port=18082 --confirm-zmq-rpc-external-bind --zmq-pub=tcp://0.0.0.0:18083 > /dev/null
+        wait_healthy "$NODE"
+        FOLLOW=(--daemon="tcp://$NODE:18082" --sub="tcp://$NODE:18083" --regtest)
+
+        OPTS=(--network "$NETWORK")
+        start "" "${FOLLOW[@]}" --rest-server=http://0.0.0.0:8443 --confirm-external-bind --log-level=1
         wait_healthy
         docker exec "$CONTAINER" monero-lws-admin --help > /dev/null || fail "monero-lws-admin does not run"
         stop
 
-        printf 'rest-server=http://0.0.0.0:8444\nconfirm-external-bind=1\nregtest=1\nlog-level=1\n' > "$CONFIG"
+        printf 'daemon=tcp://%s:18082\nsub=tcp://%s:18083\nregtest=1\nrest-server=http://0.0.0.0:8444\nconfirm-external-bind=1\nlog-level=1\n' "$NODE" "$NODE" > "$CONFIG"
         start /home/monero/.bitmonero/lws.conf --config-file=/home/monero/.bitmonero/lws.conf
         wait_healthy
         stop
 
-        OPTS=("${HARDENED[@]}")
+        OPTS=("${HARDENED[@]}" --network "$NETWORK")
         start /home/monero/.bitmonero/lws.conf --config-file=/home/monero/.bitmonero/lws.conf
         wait_healthy
         stop

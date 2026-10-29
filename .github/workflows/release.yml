@@ -181,7 +181,7 @@ jobs:
         run: |
           ./bin/smoke_test.sh monero-daemon-rpc "$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST" "$VARIANT"
           ./bin/smoke_test.sh monero-wallet-rpc "$REGISTRY/monero-wallet-rpc@$WALLET_DIGEST" "$VARIANT"
-          ./bin/smoke_test.sh monero-wallet-light "$REGISTRY/monero-wallet-light@$LIGHT_DIGEST" "$VARIANT"
+          DAEMON_IMAGE="$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST" ./bin/smoke_test.sh monero-wallet-light "$REGISTRY/monero-wallet-light@$LIGHT_DIGEST" "$VARIANT"
         env:
           VARIANT: ${{ matrix.variant }}
           DAEMON_DIGEST: ${{ steps.monero-daemon-rpc.outputs.digest }}

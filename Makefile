@@ -23,7 +23,7 @@ build: ## Build the images, e.g. make build VARIANT=private-testnet NPROC=1
 test: ## Smoke test the images of make build and run the tests of monero-wallet-light
 	./bin/smoke_test.sh monero-daemon-rpc monero-daemon-rpc:$(VARIANT) $(VARIANT)
 	./bin/smoke_test.sh monero-wallet-rpc monero-wallet-rpc:$(VARIANT) $(VARIANT)
-	./bin/smoke_test.sh monero-wallet-light monero-wallet-light:$(VARIANT) $(VARIANT)
+	DAEMON_IMAGE=monero-daemon-rpc:$(VARIANT) ./bin/smoke_test.sh monero-wallet-light monero-wallet-light:$(VARIANT) $(VARIANT)
 	./bin/wallet_light_tests.sh monero-daemon-rpc:$(VARIANT) monero-wallet-rpc:$(VARIANT) monero-wallet-light:$(VARIANT) $(VARIANT)
 
 functional: ## Run the functional tests of monero-project on the images of make build, e.g. make functional TESTS="uri wallet"
