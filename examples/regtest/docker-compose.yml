@@ -147,9 +147,38 @@ services:
     ports:
       - "127.0.0.1:18084:18084"
 
+  xmr_lws:
+    image: ghcr.io/libmonero/monero-wallet-light:${MONERO_TAG:-latest}
+    command: [
+      "--daemon=tcp://node_2:18085",
+      "--sub=tcp://node_2:18086",
+      "--log-level=4",
+      "--webhook-ssl-verification=none",
+      "--disable-admin-auth",
+      "--rest-server=http://0.0.0.0:8443/",
+      "--admin-rest-server=http://0.0.0.0:8444/",
+      "--access-control-origin=*",
+      "--confirm-external-bind",
+      "--max-subaddresses=1000",
+      "--auto-accept-creation",
+      "--auto-accept-import",
+      "--regtest"
+    ]
+    volumes:
+      - xmr_lws_data:/home/monero/.bitmonero
+    ports:
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:8444:8444"
+    depends_on:
+      - node_1
+      - node_2
+    restart: on-failure
+    <<: *logging
+
 volumes:
   node_1_data:
   node_2_data:
   xmr_wallet_1_data:
   xmr_wallet_2_data:
   xmr_wallet_3_data:
+  xmr_lws_data:

@@ -1,6 +1,6 @@
 # Usage
 
-The images take the arguments of `monerod` and `monero-wallet-rpc`. Nothing is set by default, except `--non-interactive` in the daemon. Everything can also be set in a config file.
+The images take the arguments of `monerod`, `monero-wallet-rpc` and `monero-lws-daemon`. Nothing is set by default, except `--non-interactive` in the daemon. Everything can also be set in a config file.
 
 Compose files for a node with a wallet and for tests are in [examples](../examples). They take the image tag from `MONERO_TAG`, in the environment or in a `.env` file next to the compose file, for example `MONERO_TAG=v0.18.5.1-1 docker compose -f examples/docker-compose.yml up -d`.
 
@@ -50,6 +50,28 @@ curl --digest -u rpc_user:abc123 http://127.0.0.1:38083/json_rpc -H 'Content-Typ
 
 The wallet takes `--stagenet` and `--testnet`. For a regtest daemon, start the wallet without a network flag.
 
+## monero-wallet-light
+
+The light wallet server, [monero-lws](https://github.com/vtnerd/monero-lws), follows a node through its zmq rpc and its zmq pub, so the node has to publish both. The rest server is on `https://0.0.0.0:8443` unless `--rest-server` says otherwise, the database is kept in `/home/monero/.bitmonero`:
+
+```bash
+docker run -d --name monero-lws -v lws_data:/home/monero/.bitmonero \
+  -p 127.0.0.1:8443:8443 \
+  ghcr.io/libmonero/monero-wallet-light:latest \
+  --daemon=tcp://monerod:38082 --sub=tcp://monerod:38083 \
+  --rest-server=http://0.0.0.0:8443 --confirm-external-bind
+```
+
+The node needs `--zmq-rpc-bind-ip=0.0.0.0 --zmq-rpc-bind-port=38082 --zmq-pub=tcp://0.0.0.0:38083`, with `--confirm-zmq-rpc-external-bind` when it is not on localhost. A regtest node takes `--regtest` in the light wallet server too, see the [compose file](../examples/regtest/docker-compose.yml).
+
+`monero-lws-admin` is in the same image, run it in the container:
+
+```bash
+docker exec monero-lws monero-lws-admin list_accounts
+```
+
+`--admin-rest-server` serves the admin api, and `--disable-admin-auth` leaves it without keys, only for tests.
+
 ## Ports
 
 | Network | p2p | rpc | zmq rpc |
@@ -58,7 +80,7 @@ The wallet takes `--stagenet` and `--testnet`. For a regtest daemon, start the w
 | testnet | `28080` | `28081` | `28082` |
 | stagenet | `38080` | `38081` | `38082` |
 
-`monero-wallet-rpc` has no default port, `--rpc-bind-port` is required. The examples use `38083` on stagenet and `18082` to `18084` in the tests. The restricted rpc of a public node is on `--rpc-restricted-bind-port`, `18089` in the examples. The ports of the images are only documentation, they are published with `-p` or `ports:`.
+`monero-wallet-rpc` has no default port, `--rpc-bind-port` is required. `monero-wallet-light` has its rest server on `8443`, and the admin one, with `--admin-rest-server`, on a port of choice, `8444` in the examples. The examples use `38083` on stagenet and `18082` to `18084` in the tests. The restricted rpc of a public node is on `--rpc-restricted-bind-port`, `18089` in the examples. The ports of the images are only documentation, they are published with `-p` or `ports:`.
 
 ## Config file
 
@@ -83,7 +105,7 @@ rpc-login=superuser:abctesting123
 
 ## Data and permissions
 
-The containers run as `monero`, uid 1000. Volumes have to be mounted on the paths of the image, `/home/monero/.bitmonero` and `/home/monero/wallets`, which are owned by that user. A volume on any other path is owned by root and cannot be written, `monero-wallet-rpc` fails with `failed to save file "/wallet/wallet.keys"`.
+The containers run as `monero`, uid 1000. Volumes have to be mounted on the paths of the image, `/home/monero/.bitmonero` (the daemon and the light wallet server) and `/home/monero/wallets`, which are owned by that user. A volume on any other path is owned by root and cannot be written, `monero-wallet-rpc` fails with `failed to save file "/wallet/wallet.keys"`.
 
 A named volume is fine. A host directory has to be owned by uid 1000, or the container started with the uid that owns it:
 
@@ -96,7 +118,7 @@ A directory owned by root, which is what Docker creates for a missing host path,
 
 ## Healthcheck
 
-Both images have one. It reads the rpc port, the network and `rpc-login` from the arguments or from the config file, so it follows whatever configuration is used, and calls `/get_height` on the daemon and `get_version` on the wallet. A `401` is accepted when the login is not where it can read it. The state is in `docker ps` and `docker inspect`, and the interval can be changed with the `--health-*` options.
+The images have one. It reads the rpc port, the network and `rpc-login` from the arguments or from the config file, so it follows whatever configuration is used, and calls `/get_height` on the daemon, `get_version` on the wallet and `/get_version` of the rest server on the light wallet server. A `401` is accepted when the login is not where it can read it. The state is in `docker ps` and `docker inspect`, and the interval can be changed with the `--health-*` options.
 
 ## Logs
 

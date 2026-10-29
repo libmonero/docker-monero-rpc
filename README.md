@@ -12,9 +12,9 @@
 >
 > Work in progress. This is currently under maintenance and unfunded, expect bugs and breaking changes.
 
-Dockerized `monerod` and `monero-wallet-rpc` built from [woodser/monero](https://github.com/woodser/monero) source fork, for running the RPC servers used by [monero-cpp](https://github.com/woodser/monero-cpp), [monero-python](https://github.com/everoddandeven/monero-python), [monero-java](https://github.com/woodser/monero-java) and [monero-ts](https://github.com/woodser/monero-ts).
+Dockerized `monerod`, `monero-wallet-rpc` and the [monero-lws](https://github.com/vtnerd/monero-lws) light wallet server built from [woodser/monero](https://github.com/woodser/monero) source fork, for running the RPC servers used by [monero-cpp](https://github.com/woodser/monero-cpp), [monero-python](https://github.com/everoddandeven/monero-python), [monero-java](https://github.com/woodser/monero-java) and [monero-ts](https://github.com/woodser/monero-ts).
 
-* Separate `monerod` and `monero-wallet-rpc` images built from a single Dockerfile.
+* Separate `monerod`, `monero-wallet-rpc` and `monero-wallet-light` images built from a single Dockerfile.
 * Builds for `linux/amd64` and `linux/arm64`.
 * Meant for development and testing against regtest, a [private testnet](docs/private-testnet.md) with fast hardforks, or mainnet.
 
@@ -26,6 +26,8 @@ Dockerized `monerod` and `monero-wallet-rpc` built from [woodser/monero](https:/
 | `monero-daemon-rpc` | [private-testnet](docs/private-testnet.md) | `monerod` | `28080` p2p, `28081` rpc |
 | `monero-wallet-rpc` | [default](https://github.com/woodser/monero) | `monero-wallet-rpc` | `18083` rpc |
 | `monero-wallet-rpc` | [private-testnet](docs/private-testnet.md) | `monero-wallet-rpc` | `28083` rpc |
+| `monero-wallet-light` | [default](https://github.com/vtnerd/monero-lws) | `monero-lws-daemon`, `monero-lws-admin` | `8443` rest |
+| `monero-wallet-light` | [private-testnet](docs/private-testnet.md) | `monero-lws-daemon`, `monero-lws-admin` | `8443` rest |
 
 The `private-testnet` variant is built with a [patch](patches/private-testnet.patch) that schedules the testnet hardforks at low block heights, for private testnets. Its tags are prefixed with `private-testnet-`.
 

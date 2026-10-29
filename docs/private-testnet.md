@@ -51,6 +51,8 @@ curl -s http://127.0.0.1:28081/json_rpc -H 'Content-Type: application/json' \
 
 `monero-wallet-rpc` has the variant too, because wallet2 reads the same table to tell if the wallet or the daemon is outdated. Start it with `--testnet`.
 
+`monero-wallet-light` has the variant too, the light wallet server reads the same table to follow the blocks. Start it with `--testnet`.
+
 `--version` is the same in both variants, as the version comes from the commit. The variant can be told from the image tag (`private-testnet-` prefix), from the `io.libmonero.variant` label, or with the rpc call above.
 
 ## Compose
@@ -82,6 +84,7 @@ curl --digest -u rpc_daemon_user:abc123 http://127.0.0.1:18081/stop_mining -d ''
 ```bash
 docker build --target monero-daemon-rpc --build-arg VARIANT=private-testnet -t monero-daemon-rpc:private-testnet .
 docker build --target monero-wallet-rpc --build-arg VARIANT=private-testnet -t monero-wallet-rpc:private-testnet .
+docker build --target monero-wallet-light --build-arg VARIANT=private-testnet -t monero-wallet-light:private-testnet .
 ```
 
 `VARIANT` names a file in [patches](../patches), which is applied to the submodule in the build, on a copy of the sources. The submodule is not modified.

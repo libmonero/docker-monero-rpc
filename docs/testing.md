@@ -1,6 +1,6 @@
 # Tests
 
-The images can run the nodes and wallets of the tests of monero-cpp, monero-java, monero-python and monero-ts, which use a regtest network. The compose file in [examples/regtest](../examples/regtest/docker-compose.yml) has the same services and ports as the one of monero-python: two nodes connected to each other and three wallets.
+The images can run the nodes and wallets of the tests of monero-cpp, monero-java, monero-python and monero-ts, which use a regtest network. The compose file in [examples/regtest](../examples/regtest/docker-compose.yml) has the same services and ports as the one of monero-python: two nodes connected to each other, three wallets and a light wallet server.
 
 ```bash
 docker compose -f examples/regtest/docker-compose.yml up -d
@@ -11,6 +11,7 @@ docker compose -f examples/regtest/docker-compose.yml up -d
 | node_1 | `48080` p2p, `18089` rpc |
 | node_2 | `18080` p2p, `18081` rpc, `18085` zmq rpc, `18086` zmq pub |
 | xmr_wallet_1, 2, 3 | `18082`, `18083`, `18084` |
+| xmr_lws | `8443` rest, `8444` admin rest |
 
 Logins are `rpc_daemon_user:abc123` for the nodes and `rpc_user:abc123` for the wallets. Set `MONERO_TAG` to a version tag, for example `MONERO_TAG=v0.18.5.1-1 docker compose ... up -d`, to keep the tests on the same Monero.
 
@@ -47,6 +48,6 @@ What changes in a compose file that uses `lalanza808/monero`:
 * The daemon has no `--non-interactive`, it is in the entrypoint and repeating it is an error. The wallet accepts it.
 * Volumes go on `/home/monero/.bitmonero` and `/home/monero/wallets` instead of `/data` and `/wallet`, see [usage](usage.md#data-and-permissions).
 * The wallets take no `--regtest`, only the nodes do.
-* There is no `monero-lws`, run it from its own image.
+* `monero-lws` is the `monero-wallet-light` image, the entrypoint is `monero-lws-daemon` and `monero-lws-admin` is in the image.
 
 For a network with the hardforks at low heights instead of regtest, see [private testnet](private-testnet.md).

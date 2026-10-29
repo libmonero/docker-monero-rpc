@@ -1,6 +1,6 @@
 # Releases
 
-The images are published to `ghcr.io/libmonero/monero-daemon-rpc` and `ghcr.io/libmonero/monero-wallet-rpc`.
+The images are published to `ghcr.io/libmonero/monero-daemon-rpc`, `ghcr.io/libmonero/monero-wallet-rpc` and `ghcr.io/libmonero/monero-wallet-light`, with the same tags.
 
 ## Tags
 
@@ -26,7 +26,7 @@ git tag v0.18.5.1-2
 git push <libmonero remote> v0.18.5.1-2
 ```
 
-The [Release](../.github/workflows/release.yml) workflow checks that the tag matches the submodule, waits for the [Test](../.github/workflows/test.yml) run of the commit, builds both variants for `linux/amd64` and `linux/arm64`, tests the pushed images, scans them with Trivy, signs them and drafts a GitHub release with the binaries. Publish the draft when it looks right.
+The [Release](../.github/workflows/release.yml) workflow checks that the tag matches the submodule, waits for the [Test](../.github/workflows/test.yml) run of the commit, builds the three images in both variants for `linux/amd64` and `linux/arm64`, tests the pushed images, scans them with Trivy, signs them and drafts a GitHub release with the binaries. Publish the draft when it looks right.
 
 Protect the `v*` tags with a ruleset, a published tag should not be moved.
 

@@ -1,16 +1,19 @@
 # Building
 
 1. Install [Docker](https://docs.docker.com/engine/install/) with [Buildx](https://docs.docker.com/build/concepts/overview/#buildx).
-2. Clone the repository with its submodules: `git clone --recurse-submodules https://github.com/libmonero/docker-monero-rpc.git`, or `./bin/update_submodules.sh` if it is already cloned.
+2. Clone the repository and initialize its submodules with `./bin/update_submodules.sh`. `git clone --recurse-submodules` also clones a copy of Monero inside monero-lws, which is not used.
 3. Build the images:
     ```bash
     docker build --target monero-daemon-rpc -t monero-daemon-rpc .
     docker build --target monero-wallet-rpc -t monero-wallet-rpc .
+    docker build --target monero-wallet-light -t monero-wallet-light .
     ```
     Or `make build`, see `make help`.
-4. Run the tests: `./bin/smoke_test.sh monero-daemon-rpc monero-daemon-rpc` and `./bin/smoke_test.sh monero-wallet-rpc monero-wallet-rpc`, or `make test`.
+4. Run the tests: `./bin/smoke_test.sh <image name> <image>` for each image, or `make test`.
 
 The Monero version of the images is the one of the submodule, `./bin/monero_version.sh` prints it as `monerod --version` does.
+
+`monero-wallet-light` is [monero-lws](https://github.com/vtnerd/monero-lws) at the tag of the `external/monero-lws` submodule, built against the same monero-project. Use the release branch of monero-lws that matches the Monero of the submodule, `release-v1.0_0.18` for Monero 0.18: `git -C external/monero-lws fetch --tags && git -C external/monero-lws checkout v1.0.5`, and commit the new reference.
 
 ## Variants
 
