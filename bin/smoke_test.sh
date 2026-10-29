@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
-# usage: smoke_test.sh <monero-daemon-rpc|monero-wallet-rpc> <image> [default|private-testnet]
+# usage: smoke_test.sh <monero-daemon-rpc|monero-wallet-rpc|monero-wallet-light> <image> [default|private-testnet]
 set -euo pipefail
 
 NAME=$1
 IMAGE=$2
 VARIANT=${3:-default}
 VERSION=$("$(dirname "$0")/monero_version.sh")
+LWS_VERSION=$(sed -n 's/.*id\[\] = "\(.*\)";/\1/p' "$(dirname "$0")/../external/monero-lws/src/lws_version.h.in")
 CONTAINER=smoke-test-$$
 HARDENED=(--read-only --cap-drop ALL --security-opt no-new-privileges)
 OPTS=()
@@ -62,7 +63,11 @@ stop() {
 
 output=$(docker run --rm "$IMAGE" --version)
 echo "$output"
-echo "$output" | grep -qF "($VERSION)" || fail "expected version $VERSION"
+case $NAME in
+    monero-wallet-light) expected="monero-lws version $LWS_VERSION" ;;
+    *) expected="($VERSION)" ;;
+esac
+echo "$output" | grep -qF "$expected" || fail "expected $expected"
 [ "$(docker run --rm --entrypoint id "$IMAGE" -u)" != 0 ] || fail "image runs as root"
 [ "$(docker inspect -f '{{index .Config.Labels "io.libmonero.variant"}}' "$IMAGE")" = "$VARIANT" ] || fail "image is not the $VARIANT variant"
 
@@ -121,6 +126,23 @@ case $NAME in
 
         OPTS=("${HARDENED[@]}")
         start /home/monero/wallets/wallet.conf --config-file=/home/monero/wallets/wallet.conf
+        wait_healthy
+        stop
+        ;;
+    monero-wallet-light)
+        # no daemon to follow, the rest server has to be up anyway
+        start "" --rest-server=http://0.0.0.0:8443 --confirm-external-bind --regtest --log-level=1
+        wait_healthy
+        docker exec "$CONTAINER" monero-lws-admin --help > /dev/null || fail "monero-lws-admin does not run"
+        stop
+
+        printf 'rest-server=http://0.0.0.0:8444\nconfirm-external-bind=1\nregtest=1\nlog-level=1\n' > "$CONFIG"
+        start /home/monero/.bitmonero/lws.conf --config-file=/home/monero/.bitmonero/lws.conf
+        wait_healthy
+        stop
+
+        OPTS=("${HARDENED[@]}")
+        start /home/monero/.bitmonero/lws.conf --config-file=/home/monero/.bitmonero/lws.conf
         wait_healthy
         stop
         ;;
