@@ -42,7 +42,13 @@ Without `TESTS` it runs all the tests but four, which takes about 15 minutes. `v
 
 ## monero-wallet-light
 
-The build of the image runs the unit tests of monero-lws, and [lws_test.sh](../bin/lws_test.sh) starts a node, a wallet and the light wallet server from the images of `make build`, mines blocks and waits for the light wallet server to scan up to the top of the chain, `make test` runs it. It also listens to the zmq pub of the node, for new blocks, and to the one of the light wallet server, for the payments of the account, with [pyzmq](https://pyzmq.readthedocs.io), so it needs `python3` with `venv`. A regtest chain is used by the default variant, and a testnet one by `private-testnet`: it is mined past the hardfork at height 150, the last of its schedule.
+The build of the image runs the unit tests of monero-lws. [tests](../tests) has [pytest](https://pytest.org) tests that start a node, a wallet and the light wallet server from the images of `make build`, and call the client and admin api of the light wallet server with `MoneroDaemonLight`, a client taken from [monero-python](https://github.com/libmonero/monero-python). They also listen to the zmq pub of the node, for the blocks, and to the one of the light wallet server, for the payments of an account. `make test` runs them, or:
+
+```bash
+./bin/wallet_light_tests.sh monero-daemon-rpc:private-testnet monero-wallet-rpc:private-testnet monero-wallet-light:private-testnet private-testnet
+```
+
+The default variant uses a regtest chain with 20 blocks and `private-testnet` a testnet one with 160, past the hardfork at height 150, the last of its schedule. It needs `python3` with `venv`, and the chain is made at difficulty 1.
 
 ## From lalanza808/monero
 

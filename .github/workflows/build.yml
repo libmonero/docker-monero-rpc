@@ -112,8 +112,8 @@ jobs:
       - name: Test monero-wallet-light
         run: ./bin/smoke_test.sh monero-wallet-light monero-wallet-light:ci ${{ matrix.variant }}
 
-      - name: Follow a chain with monero-wallet-light
-        run: ./bin/lws_test.sh monero-daemon-rpc:ci monero-wallet-rpc:ci monero-wallet-light:ci ${{ matrix.variant }}
+      - name: Run the tests of monero-wallet-light
+        run: ./bin/wallet_light_tests.sh monero-daemon-rpc:ci monero-wallet-rpc:ci monero-wallet-light:ci ${{ matrix.variant }}
 
       - name: Extract binaries
         run: |
