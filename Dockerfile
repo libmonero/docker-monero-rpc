@@ -151,6 +151,7 @@ ENTRYPOINT ["monero-wallet-rpc"]
 FROM runtime AS monero-wallet-light
 
 COPY --from=build-monero-wallet-light /out/monero-lws-daemon /out/monero-lws-admin /usr/local/bin/
+COPY external/monero-lws/LICENSE /usr/share/licenses/monero-lws/LICENSE
 COPY --chmod=0755 docker/healthcheck-monero-wallet-light.sh /usr/local/bin/healthcheck.sh
 
 LABEL org.opencontainers.image.title="monero-wallet-light" \
