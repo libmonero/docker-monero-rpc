@@ -1,5 +1,6 @@
+import pytest
 from conftest import Account, Stack
-from monero_daemon_light import MoneroDaemonLight
+from monero_daemon_light import MoneroDaemonLight, MoneroRpcError
 
 
 def test_get_version(light: MoneroDaemonLight, variant: str) -> None:
@@ -40,11 +41,14 @@ def test_get_subaddrs(light: MoneroDaemonLight, account: Account) -> None:
 
 def test_provision_subaddrs(light: MoneroDaemonLight, account: Account) -> None:
     result = light.provision_subaddrs(account.address, account.view_key, maj_i=0, min_i=1, n_maj=1, n_min=2)
-    assert "new_subaddrs" in result
-    assert "all_subaddrs" in result
+    # the range may have been provisioned already, then there is nothing new
+    assert result["all_subaddrs"]
 
 
-def test_get_unspent_outs(light: MoneroDaemonLight, account: Account) -> None:
-    result = light.get_unspent_outs(account.address, account.view_key, amount=0, mixin=15, use_dust=True)
+def test_get_unspent_outs(light: MoneroDaemonLight, stack: Stack, account: Account) -> None:
+    try:
+        result = light.get_unspent_outs(account.address, account.view_key, amount=0, mixin=15, use_dust=True)
+    except MoneroRpcError as e:
+        pytest.fail(f"{e}\n{stack.logs('light', 60)}")
     assert "per_byte_fee" in result
     assert "outputs" in result
