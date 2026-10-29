@@ -40,6 +40,10 @@ make functional TESTS="daemon_info wallet"
 
 Without `TESTS` it runs all the tests but four, which takes about 15 minutes. `validate_address` and `address_book` look up openalias addresses, which needs a resolver with dnssec and the runners do not have one, `mining` and `rpc_payment` need helpers that are not built here. The tests start 4 nodes and 6 wallets in regtest and each node that verifies blocks uses about 2.4 GB of memory, so keep the full list for a machine with 16 GB. Needs `python3` with `venv`.
 
+## monero-wallet-light
+
+The build of the image runs the unit tests of monero-lws, and [lws_test.sh](../bin/lws_test.sh) starts a node, a wallet and the light wallet server from the images of `make build`, mines blocks and waits for the light wallet server to scan up to the top of the chain, `make test` runs it. It also listens to the zmq pub of the node, for new blocks, and to the one of the light wallet server, for the payments of the account, with [pyzmq](https://pyzmq.readthedocs.io), so it needs `python3` with `venv`. A regtest chain is used by the default variant, and a testnet one by `private-testnet`: it is mined past the hardfork at height 150, the last of its schedule.
+
 ## From lalanza808/monero
 
 What changes in a compose file that uses `lalanza808/monero`:
