@@ -29,7 +29,7 @@ Dockerized `monerod`, `monero-wallet-rpc` and the [monero-lws](https://github.co
 | `monero-wallet-light` | [default](https://github.com/vtnerd/monero-lws) | `monero-lws-daemon`, `monero-lws-admin` | `8443` rest |
 | `monero-wallet-light` | [private-testnet](docs/private-testnet.md) | `monero-lws-daemon`, `monero-lws-admin` | `8443` rest |
 
-The `private-testnet` variant is built with a [patch](patches/private-testnet.patch) that schedules the testnet hardforks at low block heights, for private testnets. Its tags are prefixed with `private-testnet-`.
+The `private-testnet` variant is built with [patches](patches) that schedule the testnet hardforks at low block heights and drop the checkpoints of the public testnet, for private testnets. Its tags are prefixed with `private-testnet-`.
 
 ## Documentation
 

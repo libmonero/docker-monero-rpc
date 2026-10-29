@@ -13,7 +13,12 @@ TAG=$(cat /version)
 cd /src
 rm -f external/*/.git
 
-[ "$VARIANT" = default ] || git -C external/monero-project apply "/src/patches/$VARIANT.patch"
+# the patches of the variant, patches/<variant>*.patch
+if [ "$VARIANT" != default ]; then
+    for patch in /src/patches/"$VARIANT"*.patch; do
+        git -C external/monero-project apply "$patch"
+    done
+fi
 
 # what monero-project would have asked git for
 release=false

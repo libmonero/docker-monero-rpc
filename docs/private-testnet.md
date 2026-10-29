@@ -51,7 +51,7 @@ curl -s http://127.0.0.1:28081/json_rpc -H 'Content-Type: application/json' \
 
 `monero-wallet-rpc` has the variant too, because wallet2 reads the same table to tell if the wallet or the daemon is outdated. Start it with `--testnet`.
 
-`monero-wallet-light` has the variant too, the light wallet server reads the same table to follow the blocks. It has no `--testnet`, start it with `--network=test`.
+`monero-wallet-light` has the variant too, the light wallet server reads the same table to follow the blocks, and the checkpoints are the ones of the patch. It has no `--testnet`, start it with `--network=test`.
 
 `--version` is the same in both variants, as the version comes from the commit. The variant can be told from the image tag (`private-testnet-` prefix), from the `io.libmonero.variant` label, or with the rpc call above.
 
@@ -87,11 +87,11 @@ docker build --target monero-wallet-rpc --build-arg VARIANT=private-testnet -t m
 docker build --target monero-wallet-light --build-arg VARIANT=private-testnet -t monero-wallet-light:private-testnet .
 ```
 
-`VARIANT` names a file in [patches](../patches), which is applied to the submodule in the build, on a copy of the sources. The submodule is not modified.
+`VARIANT` names the files in [patches](../patches) that start with it, which are applied to the submodule in the build, on a copy of the sources. The submodule is not modified.
 
-## The patch
+## The patches
 
-From [haveno-dex/monero@61212af](https://github.com/haveno-dex/monero/commit/61212af8bf3a41f36bbf2f07fc7fe99dff9add4b), by woodser. It changes the testnet table in `src/hardforks/hardforks.cpp` and nothing else:
+[private-testnet.patch](../patches/private-testnet.patch) is from [haveno-dex/monero@61212af](https://github.com/haveno-dex/monero/commit/61212af8bf3a41f36bbf2f07fc7fe99dff9add4b), by woodser. It changes the testnet table in `src/hardforks/hardforks.cpp` and nothing else:
 
 ```diff
 --- a/src/hardforks/hardforks.cpp
@@ -139,9 +139,11 @@ From [haveno-dex/monero@61212af](https://github.com/haveno-dex/monero/commit/612
  const uint64_t testnet_hard_fork_version_1_till = 624633;
 ```
 
+[private-testnet-checkpoints.patch](../patches/private-testnet-checkpoints.patch) drops the checkpoints of the public testnet, except the genesis, from `src/checkpoints/checkpoints.cpp`. A private testnet does not have those blocks, and monero-lws refuses to follow a chain that does not match them (`Attempting rollback past last checkpoint`), with no option to ignore them on testnet like `--regtest` does on mainnet. It is only a problem for the light wallet server, and the nodes have no use for them either, as their chain forks from the public one at block 10.
+
 ## Maintenance
 
-The patch applies to every commit of woodser/monero pinned by the monero-cpp releases so far, since that file has not changed since 2022. If monero-project adds a hardfork to the testnet table, the patch stops applying and the build fails. `bin/update_monero_rpc.sh` checks it when the submodule is updated. To regenerate it, edit the table in the submodule, give the new version a low height, and save the diff:
+The first patch applies to every commit of woodser/monero pinned by the monero-cpp releases so far, since that file has not changed since 2022. If monero-project adds a hardfork to the testnet table, the patch stops applying and the build fails. `bin/update_monero_rpc.sh` checks it when the submodule is updated. To regenerate it, edit the table in the submodule, give the new version a low height, and save the diff:
 
 ```bash
 cd external/monero-project

@@ -31,7 +31,7 @@ RUN --mount=type=bind,source=.git/modules/external/monero-project,target=/git \
     echo "$tag" > /version
 
 # The sources are bind mounted instead of copied to keep the layers small, and
-# only the paths the build needs. VARIANT names a patch in patches/ to apply.
+# only the paths the build needs. VARIANT names the patches in patches/ to apply, patches/<variant>*.patch.
 FROM build AS build-monero-daemon-rpc
 
 COPY --from=version /version /version

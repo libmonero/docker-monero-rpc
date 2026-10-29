@@ -17,7 +17,7 @@ The Monero version of the images is the one of the submodule, `./bin/monero_vers
 
 ## Variants
 
-`VARIANT` names a patch in [patches](../patches) to apply to the sources, see [private testnet](private-testnet.md):
+`VARIANT` names the patches in [patches](../patches) to apply to the sources, see [private testnet](private-testnet.md):
 
 ```bash
 docker build --target monero-daemon-rpc --build-arg VARIANT=private-testnet -t monero-daemon-rpc:private-testnet .

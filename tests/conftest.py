@@ -204,9 +204,8 @@ def account(stack: Stack, variant: str) -> Account:
     try:
         stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
         height = stack.mine(BLOCKS[variant], account.address)
-        # the account starts at the checkpoint of lws until it syncs with a node that has blocks, scan all of them
+        # the account starts at the checkpoint of lws until it syncs with a node that has blocks, then it is rolled back
         stack.wait_synced()
-        stack.light.rescan(0, [account.address])
         stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
     except Exception as e:
         pytest.fail(f"{e!r}\n{stack.summary('light')}\n{stack.summary('node')}", pytrace=False)
