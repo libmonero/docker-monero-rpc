@@ -137,16 +137,7 @@ jobs:
           ./bin/extract_binaries.sh binaries monero-wallet-light:ci monero-lws-daemon monero-lws-admin
 
       - name: Verify binaries
-        run: |
-          cd binaries
-          for bin in monerod monero-wallet-rpc monero-lws-daemon monero-lws-admin; do
-            file "$bin"
-            file "$bin" | grep -q '${{ matrix.filearch }}' || { echo "wrong architecture: $(file "$bin")"; exit 1; }
-            file "$bin" | grep -qE 'statically linked|static-pie linked' || { echo "$bin is not statically linked"; exit 1; }
-            ! strings "$bin" | grep -qE 'INPUTRC|inputrc' || { echo "$bin contains readline"; exit 1; }
-            memsz=$(readelf -lW "$bin" | awk '/GNU_STACK/ {print $6}')
-            [ $((memsz)) -ge 8388608 ] || { echo "$bin has a thread stack of $memsz bytes"; exit 1; }
-          done
+        run: ./bin/verify_binaries.sh binaries ${{ matrix.filearch }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
