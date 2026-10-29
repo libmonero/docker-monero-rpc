@@ -18,6 +18,7 @@ env:
 jobs:
   check:
     name: check
+    if: ${{ !github.event.repository.fork }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
