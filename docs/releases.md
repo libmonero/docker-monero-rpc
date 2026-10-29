@@ -26,7 +26,10 @@ git tag v0.18.5.1-2
 git push <libmonero remote> v0.18.5.1-2
 ```
 
-The [Release](../.github/workflows/release.yml) workflow checks that the tag matches the submodule, waits for the [Test](../.github/workflows/test.yml) run of the commit, builds the three images in both variants for `linux/amd64` and `linux/arm64`, tests the pushed images, scans them with Trivy, signs them and drafts a GitHub release with the binaries. Publish the draft when it looks right.
+Pushing the tag runs [Release](../.github/workflows/release.yml), which calls [Publish](../.github/workflows/publish.yml) and then drafts a GitHub release with the binaries. Publish the draft when it looks right.
+
+* Publish checks that the tag matches the submodule, waits for the [Test](../.github/workflows/test.yml) run of the commit, builds the three images in both variants for `linux/amd64` and `linux/arm64`, tests the pushed images, scans them with Trivy and signs them. A push to `main` runs it alone, for `master`.
+* [Scan](../.github/workflows/scan.yml) scans `master` again every week, because new vulnerabilities show up after an image is published. It fails when a fix exists, rebuild by pushing to `main`.
 
 Protect the `v*` tags with a ruleset, a published tag should not be moved.
 
@@ -36,9 +39,11 @@ The images are signed with cosign, keyless:
 
 ```bash
 cosign verify ghcr.io/libmonero/monero-daemon-rpc:v0.18.5.1-1 \
-  --certificate-identity-regexp '^https://github.com/libmonero/docker-monero-rpc/\.github/workflows/release\.yml@' \
+  --certificate-identity-regexp '^https://github.com/libmonero/docker-monero-rpc/\.github/workflows/publish\.yml@' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+
+The signing job is in Publish, also for a release.
 
 The archives of the release have a `SHA256SUMS` file.
 
