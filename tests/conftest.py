@@ -1,3 +1,4 @@
+import logging
 import os
 import pathlib
 import subprocess
@@ -11,10 +12,17 @@ import requests
 from monero_daemon_light import MoneroDaemonLight
 
 # blocks made before the tests, the last hardfork of the private testnet is at height 150
+logger: logging.Logger = logging.getLogger("conftest")
+
 BLOCKS = {"default": 20, "private-testnet": 160}
 
 # debug, the highest (4) when the job is rerun with the debug logging of github
 LOG_LEVEL = 4 if os.environ.get("RUNNER_DEBUG") == "1" else 2
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    # one line per request is not needed from the libraries
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -55,6 +63,7 @@ class Stack:
 
     def run(self, service: str, args: list[str], ports: list[int]) -> None:
         publish = [arg for port in ports for arg in ("--publish", f"127.0.0.1::{port}")]
+        logger.info(f"Starting {service} from {self.images[service]}: {' '.join(args)}")
         docker("run", "-d", "--name", self.name(service), "--network", self.network, "--health-interval=5s",
                "--health-start-period=5s", *publish, self.images[service], *args)
 
@@ -62,6 +71,7 @@ class Stack:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if docker("inspect", "-f", "{{.State.Health.Status}}", self.name(service)) == "healthy":
+                logger.info(f"{service} is healthy")
                 return
             time.sleep(2)
         raise RuntimeError(f"{service} did not become healthy\n{self.logs(service)}")
@@ -77,6 +87,7 @@ class Stack:
         for service in self.images:
             result = subprocess.run(["docker", "logs", self.name(service)], capture_output=True, text=True, check=False)
             (directory / f"{service}.log").write_text(result.stdout + result.stderr)
+            logger.info(f"Saved the log of {service} to {directory / f'{service}.log'}")
 
     def summary(self, service: str) -> str:
         """The state of a container and its distinct log lines with their count, loops would fill the tail."""
@@ -122,12 +133,16 @@ class Stack:
         """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if self.light.get_version()["blockchain_height"] <= self.node_height():
+            tip = self.light.get_version()["blockchain_height"]
+            if tip <= self.node_height():
+                logger.info(f"light is synced with the node, its database is at {tip}")
                 return
+            logger.debug(f"light database is at {tip}, the node at {self.node_height()}")
             time.sleep(1)
         raise RuntimeError(f"light did not sync with the node\n{self.logs('light')}")
 
     def start(self) -> None:
+        logger.info(f"Starting the stack {self.network} for the {self.variant} variant")
         docker("network", "create", self.network)
         self.start_node()
         self.start_wallet()
@@ -159,6 +174,7 @@ class Stack:
     def mine(self, blocks: int, address: str) -> int:
         """Make blocks for an address and return the height of the node."""
         target = self.node_height() + blocks
+        logger.info(f"Making {blocks} blocks for {address[:12]}... up to height {target}")
         if self.variant == "default":
             self.json_rpc(self.node_url, "generateblocks", wallet_address=address, amount_of_blocks=blocks)
         else:
@@ -201,12 +217,14 @@ def light(stack: Stack) -> MoneroDaemonLight:
 def account(stack: Stack, variant: str) -> Account:
     """An account of the light wallet server that has been mined to and scanned."""
     account = stack.new_account("miner")
+    logger.info(f"Created the account {account.address[:12]}... of the miner")
     try:
         stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
         height = stack.mine(BLOCKS[variant], account.address)
         # the account starts at the checkpoint of lws until it syncs with a node that has blocks, then it is rolled back
         stack.wait_synced()
-        stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
+        scanned = stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
+        logger.info(f"The miner is scanned up to {scanned} of {height}")
     except Exception as e:
         pytest.fail(f"{e!r}\n{stack.summary('light')}\n{stack.summary('node')}", pytrace=False)
     return account

@@ -1,7 +1,10 @@
 import json
+import logging
 
 from conftest import Account, Stack
 from monero_daemon_light import MoneroDaemonLight
+
+logger: logging.Logger = logging.getLogger("TestAdmin")
 
 
 def addresses(accounts: list[dict]) -> list[str]:
@@ -9,7 +12,9 @@ def addresses(accounts: list[dict]) -> list[str]:
 
 
 def test_list_accounts(light: MoneroDaemonLight, account: Account) -> None:
-    assert account.address in addresses(light.list_accounts()["active"])
+    active = addresses(light.list_accounts()["active"])
+    logger.info(f"{len(active)} active account(s)")
+    assert account.address in active
 
 
 def test_list_requests(light: MoneroDaemonLight) -> None:

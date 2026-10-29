@@ -14,4 +14,4 @@ VENV=$ROOT/build/tests/venv
 LOGS=$ROOT/build/tests/logs
 rm -rf "$LOGS"
 
-"$VENV/bin/pytest" "$ROOT/tests" --daemon-image "$1" --wallet-image "$2" --light-image "$3" --variant "${4:-default}" --logs-dir "$LOGS"
+"$VENV/bin/pytest" "$ROOT/tests" --daemon-image "$1" --wallet-image "$2" --light-image "$3" --variant "${4:-default}" --logs-dir "$LOGS" --log-file "$LOGS/pytest.log"
