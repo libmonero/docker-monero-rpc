@@ -168,5 +168,8 @@ EXPOSE 8443
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s CMD healthcheck.sh
 
+# lws only handles SIGINT, as pid 1 it would ignore SIGTERM and get killed
+STOPSIGNAL SIGINT
+
 # everything else is up to the user, as arguments or in a config file
 ENTRYPOINT ["monero-lws-daemon"]
