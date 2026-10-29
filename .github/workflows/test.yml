@@ -42,7 +42,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: echo "run-id=$(./bin/wait_for_run.sh build.yml "$SHA" "$GITHUB_EVENT_NAME")" >> "$GITHUB_OUTPUT"
+        run: |
+          id=$(./bin/wait_for_run.sh build.yml "$SHA" "$GITHUB_EVENT_NAME")
+          echo "run-id=$id" >> "$GITHUB_OUTPUT"
 
   functional:
     name: ${{ matrix.arch }}
