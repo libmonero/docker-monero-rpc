@@ -2,6 +2,7 @@
 
 # usage: smoke_test.sh <monero-daemon-rpc|monero-wallet-rpc|monero-wallet-light> <image> [default|private-testnet]
 # monero-wallet-light exits without a node to follow, DAEMON_IMAGE is the monero-daemon-rpc image to start one from
+# LOGS_DIR is a directory to save the logs of the containers to
 set -euo pipefail
 
 NAME=$1
@@ -10,6 +11,11 @@ VARIANT=${3:-default}
 VERSION=$("$(dirname "$0")/monero_version.sh")
 LWS_VERSION=$(sed -n 's/.*id\[\] = "\(.*\)";/\1/p' "$(dirname "$0")/../external/monero-lws/src/lws_version.h.in")
 CONTAINER=smoke-test-$$
+SCENARIO=0
+LOGS_DIR=${LOGS_DIR:-}
+# debug, the highest when the job is rerun with the debug logging of github
+LEVEL=2
+[ "${RUNNER_DEBUG:-}" != 1 ] || LEVEL=4
 NODE=$CONTAINER-node
 NETWORK=$CONTAINER
 HARDENED=(--read-only --cap-drop ALL --security-opt no-new-privileges)
@@ -18,7 +24,17 @@ CONFIG=$(mktemp)
 # docker cp keeps the owner, the container user has to be able to read it
 chmod 644 "$CONFIG"
 
+# save_logs <container> <name of the file>
+save_logs() {
+    [ -n "$LOGS_DIR" ] || return 0
+    docker inspect "$1" > /dev/null 2>&1 || return 0
+    mkdir -p "$LOGS_DIR"
+    docker logs "$1" > "$LOGS_DIR/$2.log" 2>&1 || true
+}
+
 cleanup() {
+    save_logs "$CONTAINER" "$NAME-$SCENARIO"
+    save_logs "$NODE" "$NAME-node"
     docker rm -fv "$CONTAINER" "$NODE" > /dev/null 2>&1 || true
     docker network rm "$NETWORK" > /dev/null 2>&1 || true
     rm -f "$CONFIG"
@@ -35,6 +51,7 @@ fail() {
 start() {
     local config_path=$1
     shift
+    SCENARIO=$((SCENARIO + 1))
     docker create --name "$CONTAINER" --health-interval=5s --health-start-period=5s ${OPTS[@]+"${OPTS[@]}"} "$IMAGE" "$@" > /dev/null
     [ -z "$config_path" ] || docker cp "$CONFIG" "$CONTAINER:$config_path"
     docker start "$CONTAINER" > /dev/null
@@ -62,6 +79,11 @@ wait_healthy() {
 stop() {
     docker stop -t 30 "$CONTAINER" > /dev/null
     [ "$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER")" = 0 ] || fail "unclean exit"
+    remove
+}
+
+remove() {
+    save_logs "$CONTAINER" "$NAME-$SCENARIO"
     docker rm -fv "$CONTAINER" > /dev/null
 }
 
@@ -84,11 +106,11 @@ esac
 
 case $NAME in
     monero-daemon-rpc)
-        start "" --stagenet --offline --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass
+        start "" --stagenet --offline --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass --log-level=$LEVEL
         wait_healthy
         stop
 
-        printf 'stagenet=1\noffline=1\nrpc-bind-ip=0.0.0.0\nconfirm-external-bind=1\nrpc-bind-port=40002\nrpc-login=user:pass\n' > "$CONFIG"
+        printf 'stagenet=1\noffline=1\nrpc-bind-ip=0.0.0.0\nconfirm-external-bind=1\nrpc-bind-port=40002\nrpc-login=user:pass\nlog-level=%s\n' "$LEVEL" > "$CONFIG"
         start /home/monero/.bitmonero/bitmonero.conf
         wait_healthy
         stop
@@ -99,14 +121,14 @@ case $NAME in
         stop
 
         OPTS=()
-        start "" --testnet --offline --rpc-bind-ip=0.0.0.0 --confirm-external-bind
+        start "" --testnet --offline --rpc-bind-ip=0.0.0.0 --confirm-external-bind --log-level=$LEVEL
         wait_healthy
         [ "$(hard_fork_height 2)" = "${HARD_FORKS[0]}" ] || fail "unexpected hard fork 2 height for $VARIANT"
         [ "$(hard_fork_height 16)" = "${HARD_FORKS[1]}" ] || fail "unexpected hard fork 16 height for $VARIANT"
         stop
         ;;
     monero-wallet-rpc)
-        start "" --stagenet --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass --wallet-dir=/home/monero/wallets --log-file=/dev/null
+        start "" --stagenet --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass --wallet-dir=/home/monero/wallets --log-file=/dev/null --log-level=$LEVEL
         wait_healthy
         docker exec "$CONTAINER" curl --fail --silent --digest --user user:pass http://127.0.0.1:40001/json_rpc \
             --header 'Content-Type: application/json' \
@@ -115,15 +137,15 @@ case $NAME in
         stop
 
         # the lookup can be slow or fail where there is no dnssec, the wallet only has to survive it
-        start "" --stagenet --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass --wallet-dir=/home/monero/wallets --log-file=/dev/null
+        start "" --stagenet --rpc-bind-ip=0.0.0.0 --confirm-external-bind --rpc-bind-port=40001 --rpc-login=user:pass --wallet-dir=/home/monero/wallets --log-file=/dev/null --log-level=$LEVEL
         wait_healthy
         docker exec "$CONTAINER" curl --silent --max-time 10 --digest --user user:pass http://127.0.0.1:40001/json_rpc \
             --header 'Content-Type: application/json' \
             --data '{"jsonrpc":"2.0","id":"0","method":"validate_address","params":{"address":"donate@getmonero.org","any_net_type":true,"allow_openalias":true}}' > /dev/null || true
         [ "$(docker inspect -f '{{.State.Status}}' "$CONTAINER")" = running ] || fail "wallet died on an openalias lookup"
-        docker rm -fv "$CONTAINER" > /dev/null
+        remove
 
-        printf 'stagenet=1\nrpc-bind-ip=0.0.0.0\nconfirm-external-bind=1\nrpc-bind-port=40002\nrpc-login=user:pass\nwallet-dir=/home/monero/wallets\nlog-file=/dev/null\n' > "$CONFIG"
+        printf 'stagenet=1\nrpc-bind-ip=0.0.0.0\nconfirm-external-bind=1\nrpc-bind-port=40002\nrpc-login=user:pass\nwallet-dir=/home/monero/wallets\nlog-file=/dev/null\nlog-level=%s\n' "$LEVEL" > "$CONFIG"
         start /home/monero/wallets/wallet.conf --config-file=/home/monero/wallets/wallet.conf
         wait_healthy
         stop
@@ -138,17 +160,17 @@ case $NAME in
         docker network create "$NETWORK" > /dev/null
         docker run -d --name "$NODE" --network "$NETWORK" --health-interval=5s --health-start-period=5s "$DAEMON_IMAGE" \
             --regtest --offline --no-igd --rpc-bind-ip=0.0.0.0 --rpc-bind-port=18081 --confirm-external-bind \
-            --zmq-rpc-bind-ip=0.0.0.0 --zmq-rpc-bind-port=18082 --confirm-zmq-rpc-external-bind --zmq-pub=tcp://0.0.0.0:18083 > /dev/null
+            --zmq-rpc-bind-ip=0.0.0.0 --zmq-rpc-bind-port=18082 --confirm-zmq-rpc-external-bind --zmq-pub=tcp://0.0.0.0:18083 --log-level=$LEVEL > /dev/null
         wait_healthy "$NODE"
         FOLLOW=(--daemon="tcp://$NODE:18082" --sub="tcp://$NODE:18083" --regtest)
 
         OPTS=(--network "$NETWORK")
-        start "" "${FOLLOW[@]}" --rest-server=http://0.0.0.0:8443 --confirm-external-bind --log-level=1
+        start "" "${FOLLOW[@]}" --rest-server=http://0.0.0.0:8443 --confirm-external-bind --log-level=$LEVEL
         wait_healthy
         docker exec "$CONTAINER" monero-lws-admin --help > /dev/null || fail "monero-lws-admin does not run"
         stop
 
-        printf 'daemon=tcp://%s:18082\nsub=tcp://%s:18083\nregtest=1\nrest-server=http://0.0.0.0:8444\nconfirm-external-bind=1\nlog-level=1\n' "$NODE" "$NODE" > "$CONFIG"
+        printf 'daemon=tcp://%s:18082\nsub=tcp://%s:18083\nregtest=1\nrest-server=http://0.0.0.0:8444\nconfirm-external-bind=1\nlog-level=%s\n' "$NODE" "$NODE" "$LEVEL" > "$CONFIG"
         start /home/monero/.bitmonero/lws.conf --config-file=/home/monero/.bitmonero/lws.conf
         wait_healthy
         stop

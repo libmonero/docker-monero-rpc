@@ -1,6 +1,6 @@
 import os
+import pathlib
 import subprocess
-import sys
 import time
 import uuid
 from typing import Any, NamedTuple
@@ -13,11 +13,15 @@ from monero_daemon_light import MoneroDaemonLight
 # blocks made before the tests, the last hardfork of the private testnet is at height 150
 BLOCKS = {"default": 20, "private-testnet": 160}
 
+# debug, the highest (4) when the job is rerun with the debug logging of github
+LOG_LEVEL = 4 if os.environ.get("RUNNER_DEBUG") == "1" else 2
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--variant", default="default", choices=list(BLOCKS), help="variant of the images")
     parser.addoption("--daemon-image", default=os.environ.get("MONERO_DAEMON_IMAGE"), help="monero-daemon-rpc image")
     parser.addoption("--wallet-image", default=os.environ.get("MONERO_WALLET_IMAGE"), help="monero-wallet-rpc image")
+    parser.addoption("--logs-dir", default=None, help="directory to save the logs of the containers to")
     parser.addoption("--light-image", default=os.environ.get("MONERO_LIGHT_IMAGE"), help="monero-wallet-light image")
 
 
@@ -67,13 +71,29 @@ class Stack:
         result = subprocess.run(["docker", "logs", "--tail", str(tail), self.name(service)], capture_output=True, text=True, check=False)
         return (result.stdout + result.stderr).strip()
 
+    def save_logs(self, directory: pathlib.Path) -> None:
+        """Save the whole log of every container, the daemons log to stderr."""
+        directory.mkdir(parents=True, exist_ok=True)
+        for service in self.images:
+            result = subprocess.run(["docker", "logs", self.name(service)], capture_output=True, text=True, check=False)
+            (directory / f"{service}.log").write_text(result.stdout + result.stderr)
+
+    def summary(self, service: str) -> str:
+        """The state of a container and its distinct log lines with their count, loops would fill the tail."""
+        state = docker("inspect", "-f", "{{.State.Status}} exit code {{.State.ExitCode}}", self.name(service), check=False)
+        result = subprocess.run(["docker", "logs", self.name(service)], capture_output=True, text=True, check=False)
+        counts: dict[str, int] = {}
+        for line in (result.stdout + result.stderr).splitlines():
+            counts[line[24:]] = counts.get(line[24:], 0) + 1
+        return f"{service}: {state}\n" + "\n".join(f"{count}x {line}" if count > 1 else line for line, count in counts.items())
+
     def url(self, service: str, port: int) -> str:
         return docker("port", self.name(service), f"{port}/tcp").splitlines()[0]
 
     def start_node(self) -> None:
         self.run("node", [*self.net_args["node"], "--offline", "--no-igd", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081",
                           "--confirm-external-bind", "--zmq-rpc-bind-ip=0.0.0.0", "--zmq-rpc-bind-port=18082",
-                          "--confirm-zmq-rpc-external-bind", "--zmq-pub=tcp://0.0.0.0:18083"], [18081, 18083])
+                          "--confirm-zmq-rpc-external-bind", "--zmq-pub=tcp://0.0.0.0:18083", f"--log-level={LOG_LEVEL}"], [18081, 18083])
         self.wait_healthy("node")
         self.node_url = f"http://{self.url('node', 18081)}"
         self.node_zmq = f"tcp://{self.url('node', 18083)}"
@@ -81,7 +101,7 @@ class Stack:
     def start_wallet(self) -> None:
         self.run("wallet", [*self.net_args["wallet"], "--offline", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18084",
                             "--confirm-external-bind", "--disable-rpc-login", "--wallet-dir=/home/monero/wallets",
-                            "--log-file=/dev/null"], [18084])
+                            "--log-file=/dev/null", f"--log-level={LOG_LEVEL}"], [18084])
         self.wait_healthy("wallet")
         self.wallet_url = f"http://{self.url('wallet', 18084)}"
 
@@ -90,7 +110,7 @@ class Stack:
                            f"--sub=tcp://{self.name('node')}:18083", "--zmq-pub=tcp://0.0.0.0:18090",
                            "--rest-server=http://0.0.0.0:8443", "--admin-rest-server=http://0.0.0.0:8444",
                            "--disable-admin-auth", "--confirm-external-bind", "--auto-accept-creation",
-                           "--max-subaddresses=1000", "--log-level=1"], [8443, 8444, 18090])
+                           "--max-subaddresses=1000", f"--log-level={LOG_LEVEL}"], [8443, 8444, 18090])
         self.wait_healthy("light")
         self.light = MoneroDaemonLight(uri=f"http://{self.url('light', 8443)}", admin_uri=f"http://{self.url('light', 8444)}")
         self.light_zmq = f"tcp://{self.url('light', 18090)}"
@@ -166,10 +186,9 @@ def stack(request: pytest.FixtureRequest, variant: str):
         stack.start()
         yield stack
     finally:
-        if request.session.testsfailed:
-            # the output of a session fixture teardown is not captured per test
-            for service in stack.images:
-                print(f"--- {service}\n{stack.logs(service, 100)}", file=sys.__stderr__)
+        logs_dir = request.config.getoption("--logs-dir")
+        if logs_dir:
+            stack.save_logs(pathlib.Path(logs_dir))
         stack.stop()
 
 
@@ -182,10 +201,13 @@ def light(stack: Stack) -> MoneroDaemonLight:
 def account(stack: Stack, variant: str) -> Account:
     """An account of the light wallet server that has been mined to and scanned."""
     account = stack.new_account("miner")
-    stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
-    height = stack.mine(BLOCKS[variant], account.address)
-    # the account starts at the checkpoint of lws until it syncs with a node that has blocks, scan all of them
-    stack.wait_synced()
-    stack.light.rescan(0, [account.address])
-    stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
+    try:
+        stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
+        height = stack.mine(BLOCKS[variant], account.address)
+        # the account starts at the checkpoint of lws until it syncs with a node that has blocks, scan all of them
+        stack.wait_synced()
+        stack.light.rescan(0, [account.address])
+        stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
+    except Exception as e:
+        pytest.fail(f"{e!r}\n{stack.summary('light')}\n{stack.summary('node')}", pytrace=False)
     return account

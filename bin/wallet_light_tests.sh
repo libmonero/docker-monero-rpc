@@ -10,4 +10,8 @@ VENV=$ROOT/build/tests/venv
 [ -d "$VENV" ] || python3 -m venv "$VENV"
 "$VENV/bin/pip" install --quiet -r "$ROOT/tests/requirements.txt"
 
-"$VENV/bin/pytest" "$ROOT/tests" --daemon-image "$1" --wallet-image "$2" --light-image "$3" --variant "${4:-default}"
+# the logs of the containers are in build/tests/logs
+LOGS=$ROOT/build/tests/logs
+rm -rf "$LOGS"
+
+"$VENV/bin/pytest" "$ROOT/tests" --daemon-image "$1" --wallet-image "$2" --light-image "$3" --variant "${4:-default}" --logs-dir "$LOGS"

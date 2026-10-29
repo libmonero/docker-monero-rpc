@@ -50,6 +50,8 @@ The build of the image runs the unit tests of monero-lws. [tests](../tests) has 
 
 The default variant uses a regtest chain with 20 blocks and `private-testnet` a testnet one with 160, past the hardfork at height 150, the last of its schedule. It needs `python3` with `venv`, and the chain is made at difficulty 1.
 
+The logs of the containers of all the tests are saved: the smoke tests in `LOGS_DIR` if it is set, the pytest tests in `build/tests/logs`, and the functional tests in `build/functional/tests/functional_tests`. The builds upload them in the `test-logs-*` and `functional-tests-logs-*` artifacts, whether the tests pass or not. The containers log at level 2, rerun a job with "Enable debug logging" for level 4, which is `RUNNER_DEBUG` in the runner.
+
 ## From lalanza808/monero
 
 What changes in a compose file that uses `lalanza808/monero`:
