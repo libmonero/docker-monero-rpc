@@ -43,7 +43,7 @@ class Stack:
         self.light: MoneroDaemonLight
         self.net_args = {
             "default": {"node": ["--regtest", "--fixed-difficulty=1"], "wallet": [], "light": ["--regtest"]},
-            "private-testnet": {"node": ["--testnet", "--fixed-difficulty=1"], "wallet": ["--testnet"], "light": ["--testnet"]},
+            "private-testnet": {"node": ["--testnet", "--fixed-difficulty=1"], "wallet": ["--testnet"], "light": ["--network=test"]},
         }[variant]
 
     def name(self, service: str) -> str:
@@ -93,7 +93,20 @@ class Stack:
                            "--max-subaddresses=1000", "--log-level=1"], [8443, 8444, 18090])
         self.wait_healthy("light")
         self.light = MoneroDaemonLight(uri=f"http://{self.url('light', 8443)}", admin_uri=f"http://{self.url('light', 8444)}")
+        self.wait_synced()
         self.light_zmq = f"tcp://{self.url('light', 18090)}"
+
+    def wait_synced(self, timeout: float = 60.0) -> None:
+        """Wait for the first sync of the light wallet server.
+
+        Its database starts at the last checkpoint of mainnet, an account created before the sync starts there.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.light.get_version()["blockchain_height"] <= self.node_height():
+                return
+            time.sleep(1)
+        raise RuntimeError(f"light did not sync with the node\n{self.logs('light')}")
 
     def start(self) -> None:
         docker("network", "create", self.network)

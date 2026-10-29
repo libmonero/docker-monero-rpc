@@ -51,7 +51,7 @@ curl -s http://127.0.0.1:28081/json_rpc -H 'Content-Type: application/json' \
 
 `monero-wallet-rpc` has the variant too, because wallet2 reads the same table to tell if the wallet or the daemon is outdated. Start it with `--testnet`.
 
-`monero-wallet-light` has the variant too, the light wallet server reads the same table to follow the blocks. Start it with `--testnet`.
+`monero-wallet-light` has the variant too, the light wallet server reads the same table to follow the blocks. It has no `--testnet`, start it with `--network=test`.
 
 `--version` is the same in both variants, as the version comes from the commit. The variant can be told from the image tag (`private-testnet-` prefix), from the `io.libmonero.variant` label, or with the rpc call above.
 

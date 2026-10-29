@@ -290,7 +290,7 @@ class MoneroDaemonLight:
         body: dict[str, Any] = {
             "address": address,
             "view_key": view_key,
-            "amount": amount,
+            "amount": str(amount),  # a uint64 is a string for lws
             "mixin": mixin,
             "use_dust": use_dust,
         }
