@@ -96,9 +96,9 @@ class Stack:
         self.light_zmq = f"tcp://{self.url('light', 18090)}"
 
     def wait_synced(self, timeout: float = 60.0) -> None:
-        """Wait for the first sync of the light wallet server, which only starts with an account.
+        """Wait for the first sync of the light wallet server, which needs an account and a node with blocks.
 
-        Its database starts at the last checkpoint of mainnet, an account is rolled back from there to the node.
+        Its database starts at the last checkpoint of mainnet and is rolled back to the node then.
         """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -183,7 +183,9 @@ def account(stack: Stack, variant: str) -> Account:
     """An account of the light wallet server that has been mined to and scanned."""
     account = stack.new_account("miner")
     stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
-    stack.wait_synced()
     height = stack.mine(BLOCKS[variant], account.address)
+    # the account starts at the checkpoint of lws until it syncs with a node that has blocks, scan all of them
+    stack.wait_synced()
+    stack.light.rescan(0, [account.address])
     stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
     return account
