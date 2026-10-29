@@ -1,6 +1,5 @@
-import pytest
 from conftest import Account, Stack
-from monero_daemon_light import MoneroDaemonLight, MoneroRpcError
+from monero_daemon_light import MoneroDaemonLight
 
 
 def test_get_version(light: MoneroDaemonLight, variant: str) -> None:
@@ -45,10 +44,9 @@ def test_provision_subaddrs(light: MoneroDaemonLight, account: Account) -> None:
     assert result["all_subaddrs"]
 
 
-def test_get_unspent_outs(light: MoneroDaemonLight, stack: Stack, account: Account) -> None:
-    try:
-        result = light.get_unspent_outs(account.address, account.view_key, amount=0, mixin=15, use_dust=True)
-    except MoneroRpcError as e:
-        pytest.fail(f"{e}\n{stack.logs('light', 60)}")
-    assert "per_byte_fee" in result
-    assert "outputs" in result
+def test_get_unspent_outs(light: MoneroDaemonLight, account: Account) -> None:
+    # the coinbase outputs have no ring, a higher mixin leaves them out
+    result = light.get_unspent_outs(account.address, account.view_key, amount=0, mixin=0, use_dust=True)
+    assert result["per_byte_fee"] > 0
+    assert int(result["amount"]) > 0
+    assert result["outputs"]
