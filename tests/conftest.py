@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import time
 import uuid
 from typing import Any, NamedTuple
@@ -61,8 +62,8 @@ class Stack:
             time.sleep(2)
         raise RuntimeError(f"{service} did not become healthy\n{self.logs(service)}")
 
-    def logs(self, service: str) -> str:
-        return docker("logs", "--tail", "30", self.name(service), check=False)
+    def logs(self, service: str, tail: int = 30) -> str:
+        return docker("logs", "--tail", str(tail), self.name(service), check=False)
 
     def url(self, service: str, port: int) -> str:
         return docker("port", self.name(service), f"{port}/tcp").splitlines()[0]
@@ -152,8 +153,9 @@ def stack(request: pytest.FixtureRequest, variant: str):
         yield stack
     finally:
         if request.session.testsfailed:
+            # the output of a session fixture teardown is not captured per test
             for service in stack.images:
-                print(f"--- {service}\n{stack.logs(service)}")
+                print(f"--- {service}\n{stack.logs(service, 100)}", file=sys.__stderr__)
         stack.stop()
 
 

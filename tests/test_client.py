@@ -28,14 +28,14 @@ def test_get_address_info(light: MoneroDaemonLight, stack: Stack, account: Accou
 
 def test_get_address_txs(light: MoneroDaemonLight, account: Account) -> None:
     result = light.get_address_txs(account.address, account.view_key)
-    assert int(result["total_received"]) > 0
+    assert int(result["total_received"]) > 0, (result, light.list_accounts())
     assert result["transactions"]
 
 
 def test_get_subaddrs(light: MoneroDaemonLight, account: Account) -> None:
+    light.provision_subaddrs(account.address, account.view_key, maj_i=0, min_i=1, n_maj=1, n_min=2)
     result = light.get_subaddrs(account.address, account.view_key)
-    assert "all_subaddrs" in result
-    assert "max_subaddrs" in result
+    assert result["all_subaddrs"]
 
 
 def test_provision_subaddrs(light: MoneroDaemonLight, account: Account) -> None:

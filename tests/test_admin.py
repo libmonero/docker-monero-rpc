@@ -13,9 +13,8 @@ def test_list_accounts(light: MoneroDaemonLight, account: Account) -> None:
 
 
 def test_list_requests(light: MoneroDaemonLight) -> None:
-    requests = light.list_requests()
-    assert "create" in requests
-    assert "import" in requests
+    # accounts are accepted on creation, so there is nothing pending
+    assert light.list_requests() == {}
 
 
 def test_add_account_and_rescan(light: MoneroDaemonLight, stack: Stack) -> None:
