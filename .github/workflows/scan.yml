@@ -1,0 +1,38 @@
+name: Scan
+
+# new vulnerabilities show up after an image is published, look at master again every week
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    name: ${{ matrix.image }} ${{ matrix.tag }}
+    if: ${{ !github.event.repository.fork }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ monero-daemon-rpc, monero-wallet-rpc, monero-wallet-light ]
+        tag: [ master, private-testnet-master ]
+
+    steps:
+      - name: Scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.repository_owner }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ matrix.tag }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
