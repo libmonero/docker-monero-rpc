@@ -63,7 +63,9 @@ class Stack:
         raise RuntimeError(f"{service} did not become healthy\n{self.logs(service)}")
 
     def logs(self, service: str, tail: int = 30) -> str:
-        return docker("logs", "--tail", str(tail), self.name(service), check=False)
+        # the daemons log to stderr
+        result = subprocess.run(["docker", "logs", "--tail", str(tail), self.name(service)], capture_output=True, text=True, check=False)
+        return (result.stdout + result.stderr).strip()
 
     def url(self, service: str, port: int) -> str:
         return docker("port", self.name(service), f"{port}/tcp").splitlines()[0]

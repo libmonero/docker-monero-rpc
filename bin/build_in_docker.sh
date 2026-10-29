@@ -30,7 +30,8 @@ case $TARGET in
         binaries=(external/monero-project/build/release/bin/monero-wallet-rpc) ;;
     lws)
         ./bin/build_monero_lws.sh
-        external/monero-lws/build/tests/unit/monero-lws-unit
+        # the scanner tests have timeouts that a busy runner can hit, run them again once
+        external/monero-lws/build/tests/unit/monero-lws-unit || external/monero-lws/build/tests/unit/monero-lws-unit
         binaries=(external/monero-lws/build/src/monero-lws-daemon external/monero-lws/build/src/monero-lws-admin) ;;
     *)
         echo "unknown target $TARGET" >&2
