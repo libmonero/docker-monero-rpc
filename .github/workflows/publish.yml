@@ -120,15 +120,14 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # the same build arguments as Build, a different one is a different layer and the cache of Build is not used
       - name: Build and push monero-daemon-rpc
         id: monero-daemon-rpc
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: monero-daemon-rpc
-          build-args: |
-            VARIANT=${{ matrix.variant }}
-            NPROC=3
+          build-args: VARIANT=${{ matrix.variant }}
           outputs: type=image,"name=${{ env.REGISTRY }}/monero-daemon-rpc",push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.version=${{ needs.check.outputs.version }}
@@ -145,9 +144,7 @@ jobs:
         with:
           context: .
           target: monero-wallet-rpc
-          build-args: |
-            VARIANT=${{ matrix.variant }}
-            NPROC=3
+          build-args: VARIANT=${{ matrix.variant }}
           outputs: type=image,"name=${{ env.REGISTRY }}/monero-wallet-rpc",push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.version=${{ needs.check.outputs.version }}
@@ -164,9 +161,7 @@ jobs:
         with:
           context: .
           target: monero-wallet-light
-          build-args: |
-            VARIANT=${{ matrix.variant }}
-            NPROC=3
+          build-args: VARIANT=${{ matrix.variant }}
           outputs: type=image,"name=${{ env.REGISTRY }}/monero-wallet-light",push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.version=${{ needs.check.outputs.version }}
