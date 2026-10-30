@@ -27,6 +27,7 @@ class MoneroWalletRpc:
         """A key of the open wallet, `view_key`, `spend_key` or `mnemonic`."""
         return self.rpc.send_json_request("query_key", {"key_type": key_type})["key"]
 
-    def validate_address(self, address: str, any_net_type: bool = False) -> dict[str, Any]:
-        """If an address is valid and of which `nettype`, without looking up openalias addresses."""
-        return self.rpc.send_json_request("validate_address", {"address": address, "any_net_type": any_net_type})
+    def validate_address(self, address: str, any_net_type: bool = False, allow_openalias: bool = False) -> dict[str, Any]:
+        """If an address is valid and of which `nettype`, an openalias address is looked up if allowed."""
+        return self.rpc.send_json_request("validate_address", {
+            "address": address, "any_net_type": any_net_type, "allow_openalias": allow_openalias})

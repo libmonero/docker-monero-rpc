@@ -29,7 +29,7 @@ The wallet has to be created first, with `create_wallet` as in [usage](usage.md#
 
 ## Functional tests
 
-[Build](../.github/workflows/build.yml) only builds the images, checks their binaries and uploads the binaries and the images. The [Test](../.github/workflows/test.yml) workflow waits for it and runs all the tests on what it uploaded, on `linux/amd64` and `linux/arm64`: the python functional tests of monero-project on the binaries, and the smoke tests and the pytest tests on the images, in both variants. Run it by hand from the Actions tab with the id of a Build run and a list of functional tests.
+[Build](../.github/workflows/build.yml) only builds the images, checks their binaries and uploads the binaries and the images. The [Test](../.github/workflows/test.yml) workflow waits for it and runs all the tests on what it uploaded, on `linux/amd64` and `linux/arm64`: the python functional tests of monero-project on the binaries, and the pytest tests on the images, in both variants: the images alone (`tests/test_images.py`) and a node, a wallet and a light wallet server together. Run it by hand from the Actions tab with the id of a Build run and a list of functional tests.
 
 The same tests run locally on the images of `make build`:
 
@@ -40,17 +40,19 @@ make functional TESTS="daemon_info wallet"
 
 Without `TESTS` it runs all the tests but four, which takes about 15 minutes. `validate_address` and `address_book` look up openalias addresses, which needs a resolver with dnssec and the runners do not have one, `mining` and `rpc_payment` need helpers that are not built here. The tests start 4 nodes and 6 wallets in regtest and each node that verifies blocks uses about 2.4 GB of memory, so keep the full list for a machine with 16 GB. Needs `python3` with `venv`.
 
-## monero-wallet-light
+## pytest tests
+
+[tests/test_images.py](../tests/test_images.py) tests the images alone, with the containers it starts: what they report with `--version`, that they run as a user, and the three ways to run each, with arguments, with a config file, and with a config file in a read-only container without capabilities, which has to stop with exit code 0. The light wallet server needs a node, so one is started for it. The containers are started with the Docker SDK for python.
 
 The build of the image runs the unit tests of monero-lws. [tests](../tests) has [pytest](https://pytest.org) tests that start a node, a wallet and the light wallet server from the images of `make build`, and call the rpc of the node and of the wallet with `MoneroDaemonRpc` and `MoneroWalletRpc`, and the client and admin api of the light wallet server with `MoneroDaemonLight`, a client taken from [monero-python](https://github.com/libmonero/monero-python). The clients are minimal: plain http, only the calls the tests use. They also listen to the zmq pub of the node, for the blocks, and to the one of the light wallet server, for the payments of an account. `make test` runs them, or:
 
 ```bash
-./bin/wallet_light_tests.sh monero-daemon-rpc:private-testnet monero-wallet-rpc:private-testnet monero-wallet-light:private-testnet private-testnet
+./bin/pytest_tests.sh monero-daemon-rpc:private-testnet monero-wallet-rpc:private-testnet monero-wallet-light:private-testnet private-testnet
 ```
 
 The default variant uses a regtest chain with 20 blocks and `private-testnet` a testnet one with 160, past the hardfork at height 150, the last of its schedule. It needs `python3` with `venv`, and the chain is made at difficulty 1.
 
-The logs of the containers of all the tests are saved: the smoke tests in `LOGS_DIR` if it is set, the pytest tests in `build/tests/logs`, and the functional tests in `build/functional/tests/functional_tests`. Test uploads them in the `smoke-tests-logs-*`, `stack-tests-logs-*` and `functional-tests-logs-*` artifacts, whether the tests pass or not. The containers log at level 2, rerun a job with "Enable debug logging" for level 4, which is `RUNNER_DEBUG` in the runner.
+The logs of the containers of all the tests are saved: the pytest tests in `build/tests/logs`, with the log of pytest, and the functional tests in `build/functional/tests/functional_tests`. Test uploads them in the `images-tests-logs-*`, `stack-tests-logs-*` and `functional-tests-logs-*` artifacts, whether the tests pass or not. The containers log at level 2, rerun a job with "Enable debug logging" for level 4, which is `RUNNER_DEBUG` in the runner.
 
 ## From lalanza808/monero
 

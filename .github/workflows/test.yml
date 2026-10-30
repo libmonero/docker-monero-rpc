@@ -93,15 +93,12 @@ jobs:
           path: build/functional/tests/functional_tests/*.log
           if-no-files-found: ignore
 
-  smoke:
-    name: smoke ${{ matrix.arch }} ${{ matrix.variant }}
+  images:
+    name: images ${{ matrix.arch }} ${{ matrix.variant }}
     needs: wait
     if: ${{ !failure() && !cancelled() }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    env:
-      # the smoke tests save the logs of their containers here
-      LOGS_DIR: build/smoke-tests
 
     strategy:
       fail-fast: false
@@ -115,6 +112,7 @@ jobs:
             arch: linux-arm64
 
     steps:
+      # the version of the submodules is what the images report
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -133,23 +131,15 @@ jobs:
       - name: Load the images
         run: ./bin/load_images.sh build/images
 
-      - name: Test monero-daemon-rpc
-        run: ./bin/smoke_test.sh monero-daemon-rpc monero-daemon-rpc:ci ${{ matrix.variant }}
-
-      - name: Test monero-wallet-rpc
-        run: ./bin/smoke_test.sh monero-wallet-rpc monero-wallet-rpc:ci ${{ matrix.variant }}
-
-      - name: Test monero-wallet-light
-        run: ./bin/smoke_test.sh monero-wallet-light monero-wallet-light:ci ${{ matrix.variant }}
-        env:
-          DAEMON_IMAGE: monero-daemon-rpc:ci
+      - name: Test the images
+        run: ./bin/pytest_tests.sh monero-daemon-rpc:ci monero-wallet-rpc:ci monero-wallet-light:ci ${{ matrix.variant }} tests/test_images.py
 
       - name: Upload the logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-tests-logs-${{ matrix.arch }}-${{ matrix.variant }}
-          path: build/smoke-tests/*.log
+          name: images-tests-logs-${{ matrix.arch }}-${{ matrix.variant }}
+          path: build/tests/logs/*
           if-no-files-found: ignore
 
   stack:
@@ -188,13 +178,13 @@ jobs:
       - name: Load the images
         run: ./bin/load_images.sh build/images
 
-      - name: Run the pytest tests on a node, a wallet and a light wallet server
-        run: ./bin/wallet_light_tests.sh monero-daemon-rpc:ci monero-wallet-rpc:ci monero-wallet-light:ci ${{ matrix.variant }}
+      - name: Test a node, a wallet and a light wallet server
+        run: ./bin/pytest_tests.sh monero-daemon-rpc:ci monero-wallet-rpc:ci monero-wallet-light:ci ${{ matrix.variant }} tests --ignore=tests/test_images.py
 
       - name: Upload the logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: stack-tests-logs-${{ matrix.arch }}-${{ matrix.variant }}
-          path: build/tests/logs/*.log
+          path: build/tests/logs/*
           if-no-files-found: ignore

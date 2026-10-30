@@ -9,7 +9,7 @@
     docker build --target monero-wallet-light -t monero-wallet-light .
     ```
     Or `make build`, see `make help`.
-4. Run the tests: `./bin/smoke_test.sh <image name> <image>` for each image, or `make test`.
+4. Run the tests: `make test`, or `./bin/pytest_tests.sh <daemon image> <wallet image> <light image> [variant] [pytest arguments]`, for example with `tests/test_images.py -k daemon` for a part.
 
 The Monero version of the images is the one of the submodule, `./bin/monero_version.sh` prints it as `monerod --version` does.
 

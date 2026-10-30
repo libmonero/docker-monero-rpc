@@ -243,9 +243,7 @@ jobs:
           daemon="$REGISTRY/monero-daemon-rpc@sha256:$(ls digests/monero-daemon-rpc)"
           wallet="$REGISTRY/monero-wallet-rpc@sha256:$(ls digests/monero-wallet-rpc)"
           light="$REGISTRY/monero-wallet-light@sha256:$(ls digests/monero-wallet-light)"
-          ./bin/smoke_test.sh monero-daemon-rpc "$daemon" "$VARIANT"
-          ./bin/smoke_test.sh monero-wallet-rpc "$wallet" "$VARIANT"
-          DAEMON_IMAGE="$daemon" ./bin/smoke_test.sh monero-wallet-light "$light" "$VARIANT"
+          ./bin/pytest_tests.sh "$daemon" "$wallet" "$light" "$VARIANT" tests/test_images.py
         env:
           VARIANT: ${{ matrix.variant }}
 
