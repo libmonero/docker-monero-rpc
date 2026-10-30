@@ -4,16 +4,17 @@ import pathlib
 import subprocess
 import time
 import uuid
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import pytest
-import requests
 
 from monero_daemon_light import MoneroDaemonLight
+from monero_daemon_rpc import MoneroDaemonRpc
+from monero_wallet_rpc import MoneroWalletRpc
 
-# blocks made before the tests, the last hardfork of the private testnet is at height 150
 logger: logging.Logger = logging.getLogger("conftest")
 
+# blocks made before the tests, the last hardfork of the private testnet is at height 150
 BLOCKS = {"default": 20, "private-testnet": 160}
 
 # debug, the highest (4) when the job is rerun with the debug logging of github
@@ -52,6 +53,8 @@ class Stack:
         self.variant = variant
         self.images = {"node": daemon_image, "wallet": wallet_image, "light": light_image}
         self.network = f"light-tests-{uuid.uuid4().hex[:8]}"
+        self.node: MoneroDaemonRpc
+        self.wallet: MoneroWalletRpc
         self.light: MoneroDaemonLight
         self.net_args = {
             "default": {"node": ["--regtest", "--fixed-difficulty=1"], "wallet": [], "light": ["--regtest"]},
@@ -106,7 +109,7 @@ class Stack:
                           "--confirm-external-bind", "--zmq-rpc-bind-ip=0.0.0.0", "--zmq-rpc-bind-port=18082",
                           "--confirm-zmq-rpc-external-bind", "--zmq-pub=tcp://0.0.0.0:18083", f"--log-level={LOG_LEVEL}"], [18081, 18083])
         self.wait_healthy("node")
-        self.node_url = f"http://{self.url('node', 18081)}"
+        self.node = MoneroDaemonRpc(f"http://{self.url('node', 18081)}")
         self.node_zmq = f"tcp://{self.url('node', 18083)}"
 
     def start_wallet(self) -> None:
@@ -114,7 +117,7 @@ class Stack:
                             "--confirm-external-bind", "--disable-rpc-login", "--wallet-dir=/home/monero/wallets",
                             "--log-file=/dev/null", f"--log-level={LOG_LEVEL}"], [18084])
         self.wait_healthy("wallet")
-        self.wallet_url = f"http://{self.url('wallet', 18084)}"
+        self.wallet = MoneroWalletRpc(f"http://{self.url('wallet', 18084)}")
 
     def start_light(self) -> None:
         self.run("light", [*self.net_args["light"], f"--daemon=tcp://{self.name('node')}:18082",
@@ -134,10 +137,10 @@ class Stack:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             tip = self.light.get_version()["blockchain_height"]
-            if tip <= self.node_height():
+            if tip <= self.node.get_height():
                 logger.info(f"light is synced with the node, its database is at {tip}")
                 return
-            logger.debug(f"light database is at {tip}, the node at {self.node_height()}")
+            logger.debug(f"light database is at {tip}, the node at {self.node.get_height()}")
             time.sleep(1)
         raise RuntimeError(f"light did not sync with the node\n{self.logs('light')}")
 
@@ -153,38 +156,24 @@ class Stack:
             docker("rm", "-fv", self.name(service), check=False)
         docker("network", "rm", self.network, check=False)
 
-    @staticmethod
-    def json_rpc(url: str, method: str, **params: Any) -> Any:
-        response = requests.post(f"{url}/json_rpc", json={"jsonrpc": "2.0", "id": "0", "method": method, "params": params}, timeout=120)
-        response.raise_for_status()
-        body = response.json()
-        assert "error" not in body, body["error"]
-        return body["result"]
-
     def new_account(self, name: str) -> Account:
         """Create a wallet and return its keys."""
-        self.json_rpc(self.wallet_url, "create_wallet", filename=name, password="", language="English")
-        address = self.json_rpc(self.wallet_url, "get_address")["address"]
-        view_key = self.json_rpc(self.wallet_url, "query_key", key_type="view_key")["key"]
-        return Account(address, view_key)
-
-    def node_height(self) -> int:
-        return requests.get(f"{self.node_url}/get_height", timeout=30).json()["height"]
+        self.wallet.create_wallet(name)
+        return Account(self.wallet.get_address(), self.wallet.query_key("view_key"))
 
     def mine(self, blocks: int, address: str) -> int:
         """Make blocks for an address and return the height of the node."""
-        target = self.node_height() + blocks
+        target = self.node.get_height() + blocks
         logger.info(f"Making {blocks} blocks for {address[:12]}... up to height {target}")
         if self.variant == "default":
-            self.json_rpc(self.node_url, "generateblocks", wallet_address=address, amount_of_blocks=blocks)
+            self.node.generate_blocks(address, blocks)
         else:
-            requests.post(f"{self.node_url}/start_mining", timeout=30, json={
-                "miner_address": address, "threads_count": 1, "do_background_mining": False, "ignore_battery": True}).raise_for_status()
+            self.node.start_mining(address)
             deadline = time.monotonic() + 120
-            while self.node_height() < target and time.monotonic() < deadline:
+            while self.node.get_height() < target and time.monotonic() < deadline:
                 time.sleep(1)
-            requests.post(f"{self.node_url}/stop_mining", timeout=30).raise_for_status()
-        return self.node_height()
+            self.node.stop_mining()
+        return self.node.get_height()
 
 
 @pytest.fixture(scope="session")
@@ -206,6 +195,16 @@ def stack(request: pytest.FixtureRequest, variant: str):
         if logs_dir:
             stack.save_logs(pathlib.Path(logs_dir))
         stack.stop()
+
+
+@pytest.fixture(scope="session")
+def node(stack: Stack) -> MoneroDaemonRpc:
+    return stack.node
+
+
+@pytest.fixture(scope="session")
+def wallet(stack: Stack) -> MoneroWalletRpc:
+    return stack.wallet
 
 
 @pytest.fixture(scope="session")

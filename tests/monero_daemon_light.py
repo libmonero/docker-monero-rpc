@@ -3,47 +3,9 @@ import logging
 import time
 from typing import Any
 
-import requests
+from monero_rpc_connection import MoneroRpcConnection, redact
 
 logger: logging.Logger = logging.getLogger("MoneroDaemonLight")
-
-
-def _redact(value: Any) -> Any:
-    """A request without the view keys, the logs are published."""
-    if isinstance(value, dict):
-        return {key: "***" if key == "view_key" else _redact(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_redact(item) for item in value]
-    return value
-
-
-class MoneroRpcError(RuntimeError):
-    """Error status answered by a rest server."""
-
-    def __init__(self, status: int, body: str) -> None:
-        super().__init__(f"{status}: {body}")
-        self.status = status
-        self.body = body
-
-
-class MoneroRpcConnection:
-    """Json over http to a rest server, the part of the connection of monero-python that the client uses."""
-
-    def __init__(self, uri: str, timeout: float = 60.0) -> None:
-        self.uri = uri.rstrip("/")
-        self.timeout = timeout
-        self.session = requests.Session()
-
-    def send_path_request(self, path: str, body: dict[str, Any] | None = None) -> Any:
-        """Post a json body to a path and return the parsed json response.
-
-        :raises MoneroRpcError: on a status other than 200.
-        """
-        response = self.session.post(f"{self.uri}/{path}", json=body or {}, timeout=self.timeout)
-        logger.debug(f"{response.status_code} /{path} {response.text[:500]}")
-        if not response.ok:
-            raise MoneroRpcError(response.status_code, response.text)
-        return response.json()
 
 
 class MoneroDaemonLight:
@@ -113,7 +75,7 @@ class MoneroDaemonLight:
             body["params"] = params
         if self.auth is not None:
             body["auth"] = self.auth
-        logger.debug(f"POST (admin) /{endpoint} {_redact(body)}")
+        logger.debug(f"POST (admin) /{endpoint} {redact(body)}")
         return self.admin_rpc.send_path_request(endpoint, body)
 
     def _client_request(self, endpoint: str, body: dict[str, Any]) -> Any:
@@ -130,7 +92,7 @@ class MoneroDaemonLight:
         if self.rpc is None:
             raise RuntimeError("MoneroDaemonLight was constructed without uri; cannot call client endpoints")
 
-        logger.debug(f"POST /{endpoint} {_redact(body)}")
+        logger.debug(f"POST /{endpoint} {redact(body)}")
         return self.rpc.send_path_request(endpoint, body)
 
     @staticmethod

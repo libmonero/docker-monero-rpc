@@ -42,7 +42,7 @@ Without `TESTS` it runs all the tests but four, which takes about 15 minutes. `v
 
 ## monero-wallet-light
 
-The build of the image runs the unit tests of monero-lws. [tests](../tests) has [pytest](https://pytest.org) tests that start a node, a wallet and the light wallet server from the images of `make build`, and call the client and admin api of the light wallet server with `MoneroDaemonLight`, a client taken from [monero-python](https://github.com/libmonero/monero-python). They also listen to the zmq pub of the node, for the blocks, and to the one of the light wallet server, for the payments of an account. `make test` runs them, or:
+The build of the image runs the unit tests of monero-lws. [tests](../tests) has [pytest](https://pytest.org) tests that start a node, a wallet and the light wallet server from the images of `make build`, and call the rpc of the node and of the wallet with `MoneroDaemonRpc` and `MoneroWalletRpc`, and the client and admin api of the light wallet server with `MoneroDaemonLight`, a client taken from [monero-python](https://github.com/libmonero/monero-python). The clients are minimal: plain http, only the calls the tests use. They also listen to the zmq pub of the node, for the blocks, and to the one of the light wallet server, for the payments of an account. `make test` runs them, or:
 
 ```bash
 ./bin/wallet_light_tests.sh monero-daemon-rpc:private-testnet monero-wallet-rpc:private-testnet monero-wallet-light:private-testnet private-testnet

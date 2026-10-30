@@ -28,8 +28,8 @@ def test_login_existing_account(light: MoneroDaemonLight, account: Account) -> N
 
 def test_get_address_info(light: MoneroDaemonLight, stack: Stack, account: Account) -> None:
     info = light.get_address_info(account.address, account.view_key)
-    logger.info(f"Scanned {info['scanned_height']} of {info['blockchain_height']}, node at {stack.node_height()}")
-    assert info["scanned_height"] >= stack.node_height() - 1
+    logger.info(f"Scanned {info['scanned_height']} of {info['blockchain_height']}, node at {stack.node.get_height()}")
+    assert info["scanned_height"] >= stack.node.get_height() - 1
     assert info["blockchain_height"] >= info["scanned_height"]
 
 
