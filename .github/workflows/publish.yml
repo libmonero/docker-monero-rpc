@@ -179,17 +179,6 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet-light
 
-      - name: Test pushed images
-        run: |
-          ./bin/smoke_test.sh monero-daemon-rpc "$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST" "$VARIANT"
-          ./bin/smoke_test.sh monero-wallet-rpc "$REGISTRY/monero-wallet-rpc@$WALLET_DIGEST" "$VARIANT"
-          DAEMON_IMAGE="$REGISTRY/monero-daemon-rpc@$DAEMON_DIGEST" ./bin/smoke_test.sh monero-wallet-light "$REGISTRY/monero-wallet-light@$LIGHT_DIGEST" "$VARIANT"
-        env:
-          VARIANT: ${{ matrix.variant }}
-          DAEMON_DIGEST: ${{ steps.monero-daemon-rpc.outputs.digest }}
-          WALLET_DIGEST: ${{ steps.monero-wallet-rpc.outputs.digest }}
-          LIGHT_DIGEST: ${{ steps.monero-wallet-light.outputs.digest }}
-
       - name: Export digests
         run: |
           mkdir -p digests/monero-daemon-rpc digests/monero-wallet-rpc digests/monero-wallet-light
@@ -208,9 +197,61 @@ jobs:
           path: digests/*
           retention-days: 1
 
+  # the images are pushed by digest and have no tag until they pass
+  test:
+    name: test ${{ matrix.arch }} ${{ matrix.variant }}
+    needs: [check, build]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-24.04, ubuntu-24.04-arm ]
+        variant: [ default, private-testnet ]
+        include:
+          - os: ubuntu-24.04
+            arch: linux-x86_64
+          - os: ubuntu-24.04-arm
+            arch: linux-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Download digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: digests-${{ matrix.variant }}-${{ matrix.arch }}
+          path: digests
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test the pushed images
+        run: |
+          daemon="$REGISTRY/monero-daemon-rpc@sha256:$(ls digests/monero-daemon-rpc)"
+          wallet="$REGISTRY/monero-wallet-rpc@sha256:$(ls digests/monero-wallet-rpc)"
+          light="$REGISTRY/monero-wallet-light@sha256:$(ls digests/monero-wallet-light)"
+          ./bin/smoke_test.sh monero-daemon-rpc "$daemon" "$VARIANT"
+          ./bin/smoke_test.sh monero-wallet-rpc "$wallet" "$VARIANT"
+          DAEMON_IMAGE="$daemon" ./bin/smoke_test.sh monero-wallet-light "$light" "$VARIANT"
+        env:
+          VARIANT: ${{ matrix.variant }}
+
   publish:
     name: publish ${{ matrix.image }} ${{ matrix.variant }}
-    needs: [check, build]
+    needs: [check, build, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

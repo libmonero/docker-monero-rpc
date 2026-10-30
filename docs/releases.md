@@ -28,7 +28,7 @@ git push <libmonero remote> v0.18.5.1-2
 
 Pushing the tag runs [Release](../.github/workflows/release.yml), which calls [Publish](../.github/workflows/publish.yml) and then drafts a GitHub release with the binaries. Publish the draft when it looks right.
 
-* Publish checks that the tag matches the submodule, waits for the [Test](../.github/workflows/test.yml) run of the commit, builds the three images in both variants for `linux/amd64` and `linux/arm64`, tests the pushed images, scans them with Trivy and signs them. A push to `main` runs it alone, for `master`.
+* Publish checks that the tag matches the submodule, waits for the [Test](../.github/workflows/test.yml) run of the commit, builds the three images in both variants for `linux/amd64` and `linux/arm64`, smoke tests the pushed images, scans them with Trivy and signs them. The manifests are only created when the smoke tests pass. A push to `main` runs it alone, for `master`.
 * [Scan](../.github/workflows/scan.yml) scans `master` again every week, because new vulnerabilities show up after an image is published. It fails when a fix exists, rebuild by pushing to `main`.
 
 Protect the `v*` tags with a ruleset, a published tag should not be moved.
