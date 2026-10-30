@@ -14,7 +14,8 @@ ENV CCACHE_DIR=/ccache
 ENV CCACHE_MAXSIZE=1G
 ENV CCACHE_COMPRESS=1
 
-RUN apk add --no-cache bash git
+COPY bin/retry.sh /usr/local/bin/retry
+RUN retry apk add --no-cache bash git
 RUN git config --global --add safe.directory '*'
 
 COPY bin/install_dependencies.sh /usr/local/bin/install_dependencies.sh
@@ -76,8 +77,9 @@ RUN --mount=type=bind,source=bin/build_monero_lws.sh,target=/src/bin/build_moner
 
 FROM ${BASE_IMAGE} AS runtime
 
-RUN apk upgrade --no-cache && \
-    apk add --no-cache ca-certificates curl && \
+COPY bin/retry.sh /usr/local/bin/retry
+RUN retry apk upgrade --no-cache && \
+    retry apk add --no-cache ca-certificates curl && \
     adduser -D -u 1000 monero
 
 ENV HOME=/home/monero

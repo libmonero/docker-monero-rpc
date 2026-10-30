@@ -12,7 +12,7 @@ UNBOUND_VERSION=1.22.0
 UNBOUND_SHA256=c5dd1bdef5d5685b2cedb749158dd152c52d44f65529a34ac15cd88d4b1b3d43
 NPROC=${NPROC:-$(nproc)}
 
-apk add --no-cache \
+retry apk add --no-cache \
     bison boost-atomic boost-chrono boost-date_time boost-dev boost-filesystem \
     boost-program_options boost-random boost-regex boost-serialization boost-static \
     boost-system boost-thread ca-certificates ccache cmake eudev-dev file flex g++ git \
@@ -24,14 +24,14 @@ export CFLAGS='-fPIC'
 export CXXFLAGS='-fPIC'
 cd /tmp
 
-wget "https://github.com/libexpat/libexpat/releases/download/${EXPAT_TAG}/expat-${EXPAT_VERSION}.tar.bz2"
+retry wget -O "expat-${EXPAT_VERSION}.tar.bz2" "https://github.com/libexpat/libexpat/releases/download/${EXPAT_TAG}/expat-${EXPAT_VERSION}.tar.bz2"
 echo "${EXPAT_SHA256}  expat-${EXPAT_VERSION}.tar.bz2" | sha256sum -c
 tar -xf "expat-${EXPAT_VERSION}.tar.bz2"
 (cd "expat-${EXPAT_VERSION}" &&
     ./configure --enable-static --disable-shared --with-pic --prefix=/usr &&
     make -j"${NPROC}" && make install)
 
-wget "https://www.nlnetlabs.nl/downloads/unbound/unbound-${UNBOUND_VERSION}.tar.gz"
+retry wget -O "unbound-${UNBOUND_VERSION}.tar.gz" "https://www.nlnetlabs.nl/downloads/unbound/unbound-${UNBOUND_VERSION}.tar.gz"
 echo "${UNBOUND_SHA256}  unbound-${UNBOUND_VERSION}.tar.gz" | sha256sum -c
 tar xzf "unbound-${UNBOUND_VERSION}.tar.gz"
 (cd "unbound-${UNBOUND_VERSION}" &&
@@ -40,7 +40,7 @@ tar xzf "unbound-${UNBOUND_VERSION}.tar.gz"
         --with-libunbound-only --without-pyunbound --without-pythonmodule --disable-flto &&
     make -j"${NPROC}" && make install)
 
-wget "https://github.com/zeromq/libzmq/releases/download/v${ZEROMQ_VERSION}/zeromq-${ZEROMQ_VERSION}.tar.gz"
+retry wget -O "zeromq-${ZEROMQ_VERSION}.tar.gz" "https://github.com/zeromq/libzmq/releases/download/v${ZEROMQ_VERSION}/zeromq-${ZEROMQ_VERSION}.tar.gz"
 echo "${ZEROMQ_SHA256}  zeromq-${ZEROMQ_VERSION}.tar.gz" | sha256sum -c
 tar xzf "zeromq-${ZEROMQ_VERSION}.tar.gz"
 (cd "zeromq-${ZEROMQ_VERSION}" &&
