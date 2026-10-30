@@ -1,13 +1,15 @@
 import logging
 import os
 import pathlib
-import subprocess
+import re
 import time
 import uuid
+from collections.abc import Iterator
 from typing import NamedTuple
 
 import pytest
 
+from container import Container, Containers, client
 from monero_daemon_light import MoneroDaemonLight
 from monero_daemon_rpc import MoneroDaemonRpc
 from monero_wallet_rpc import MoneroWalletRpc
@@ -34,10 +36,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--light-image", default=os.environ.get("MONERO_LIGHT_IMAGE"), help="monero-wallet-light image")
 
 
-def docker(*args: str, check: bool = True) -> str:
-    return subprocess.run(["docker", *args], capture_output=True, text=True, check=check).stdout.strip()
-
-
 class Account(NamedTuple):
     address: str
     view_key: str
@@ -52,7 +50,8 @@ class Stack:
     def __init__(self, variant: str, daemon_image: str, wallet_image: str, light_image: str) -> None:
         self.variant = variant
         self.images = {"node": daemon_image, "wallet": wallet_image, "light": light_image}
-        self.network = f"light-tests-{uuid.uuid4().hex[:8]}"
+        self.network = client.networks.create(f"light-tests-{uuid.uuid4().hex[:8]}")
+        self.containers: dict[str, Container] = {}
         self.node: MoneroDaemonRpc
         self.wallet: MoneroWalletRpc
         self.light: MoneroDaemonLight
@@ -61,73 +60,50 @@ class Stack:
             "private-testnet": {"node": ["--testnet", "--fixed-difficulty=1"], "wallet": ["--testnet"], "light": ["--network=test"]},
         }[variant]
 
-    def name(self, service: str) -> str:
-        return f"{self.network}-{service}"
-
-    def run(self, service: str, args: list[str], ports: list[int]) -> None:
-        publish = [arg for port in ports for arg in ("--publish", f"127.0.0.1::{port}")]
-        logger.info(f"Starting {service} from {self.images[service]}: {' '.join(args)}")
-        docker("run", "-d", "--name", self.name(service), "--network", self.network, "--health-interval=5s",
-               "--health-start-period=5s", *publish, self.images[service], *args)
-
-    def wait_healthy(self, service: str, timeout: float = 120.0) -> None:
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            if docker("inspect", "-f", "{{.State.Health.Status}}", self.name(service)) == "healthy":
-                logger.info(f"{service} is healthy")
-                return
-            time.sleep(2)
-        raise RuntimeError(f"{service} did not become healthy\n{self.logs(service)}")
-
-    def logs(self, service: str, tail: int = 30) -> str:
-        # the daemons log to stderr
-        result = subprocess.run(["docker", "logs", "--tail", str(tail), self.name(service)], capture_output=True, text=True, check=False)
-        return (result.stdout + result.stderr).strip()
+    def run(self, service: str, args: list[str], ports: list[int]) -> Container:
+        container = Container(self.images[service], args, f"{self.network.name}-{service}", ports=ports, network=self.network.name)
+        self.containers[service] = container
+        return container
 
     def save_logs(self, directory: pathlib.Path) -> None:
         """Save the whole log of every container, the daemons log to stderr."""
         directory.mkdir(parents=True, exist_ok=True)
-        for service in self.images:
-            result = subprocess.run(["docker", "logs", self.name(service)], capture_output=True, text=True, check=False)
-            (directory / f"{service}.log").write_text(result.stdout + result.stderr)
+        for service, container in self.containers.items():
+            (directory / f"{service}.log").write_text(container.logs())
             logger.info(f"Saved the log of {service} to {directory / f'{service}.log'}")
 
     def summary(self, service: str) -> str:
         """The state of a container and its distinct log lines with their count, loops would fill the tail."""
-        state = docker("inspect", "-f", "{{.State.Status}} exit code {{.State.ExitCode}}", self.name(service), check=False)
-        result = subprocess.run(["docker", "logs", self.name(service)], capture_output=True, text=True, check=False)
+        container = self.containers[service]
         counts: dict[str, int] = {}
-        for line in (result.stdout + result.stderr).splitlines():
+        for line in container.logs().splitlines():
             counts[line[24:]] = counts.get(line[24:], 0) + 1
-        return f"{service}: {state}\n" + "\n".join(f"{count}x {line}" if count > 1 else line for line, count in counts.items())
-
-    def url(self, service: str, port: int) -> str:
-        return docker("port", self.name(service), f"{port}/tcp").splitlines()[0]
+        return f"{service}: {container.status()}\n" + "\n".join(f"{count}x {line}" if count > 1 else line for line, count in counts.items())
 
     def start_node(self) -> None:
-        self.run("node", [*self.net_args["node"], "--offline", "--no-igd", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081",
+        node = self.run("node", [*self.net_args["node"], "--offline", "--no-igd", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081",
                           "--confirm-external-bind", "--zmq-rpc-bind-ip=0.0.0.0", "--zmq-rpc-bind-port=18082",
                           "--confirm-zmq-rpc-external-bind", "--zmq-pub=tcp://0.0.0.0:18083", f"--log-level={LOG_LEVEL}"], [18081, 18083])
-        self.wait_healthy("node")
-        self.node = MoneroDaemonRpc(f"http://{self.url('node', 18081)}")
-        self.node_zmq = f"tcp://{self.url('node', 18083)}"
+        node.wait_healthy()
+        self.node = MoneroDaemonRpc(node.url(18081))
+        self.node_zmq = node.url(18083).replace("http://", "tcp://")
 
     def start_wallet(self) -> None:
-        self.run("wallet", [*self.net_args["wallet"], "--offline", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18084",
+        wallet = self.run("wallet", [*self.net_args["wallet"], "--offline", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18084",
                             "--confirm-external-bind", "--disable-rpc-login", "--wallet-dir=/home/monero/wallets",
                             "--log-file=/dev/null", f"--log-level={LOG_LEVEL}"], [18084])
-        self.wait_healthy("wallet")
-        self.wallet = MoneroWalletRpc(f"http://{self.url('wallet', 18084)}")
+        wallet.wait_healthy()
+        self.wallet = MoneroWalletRpc(wallet.url(18084))
 
     def start_light(self) -> None:
-        self.run("light", [*self.net_args["light"], f"--daemon=tcp://{self.name('node')}:18082",
-                           f"--sub=tcp://{self.name('node')}:18083", "--zmq-pub=tcp://0.0.0.0:18090",
+        light = self.run("light", [*self.net_args["light"], f"--daemon=tcp://{self.containers['node'].name}:18082",
+                           f"--sub=tcp://{self.containers['node'].name}:18083", "--zmq-pub=tcp://0.0.0.0:18090",
                            "--rest-server=http://0.0.0.0:8443", "--admin-rest-server=http://0.0.0.0:8444",
                            "--disable-admin-auth", "--confirm-external-bind", "--auto-accept-creation",
                            "--max-subaddresses=1000", f"--log-level={LOG_LEVEL}"], [8443, 8444, 18090])
-        self.wait_healthy("light")
-        self.light = MoneroDaemonLight(uri=f"http://{self.url('light', 8443)}", admin_uri=f"http://{self.url('light', 8444)}")
-        self.light_zmq = f"tcp://{self.url('light', 18090)}"
+        light.wait_healthy()
+        self.light = MoneroDaemonLight(uri=light.url(8443), admin_uri=light.url(8444))
+        self.light_zmq = light.url(18090).replace("http://", "tcp://")
 
     def wait_synced(self, timeout: float = 60.0) -> None:
         """Wait for the first sync of the light wallet server, which needs an account and a node with blocks.
@@ -142,19 +118,18 @@ class Stack:
                 return
             logger.debug(f"light database is at {tip}, the node at {self.node.get_height()}")
             time.sleep(1)
-        raise RuntimeError(f"light did not sync with the node\n{self.logs('light')}")
+        raise RuntimeError(f"light did not sync with the node\n{self.containers['light'].logs(30)}")
 
     def start(self) -> None:
-        logger.info(f"Starting the stack {self.network} for the {self.variant} variant")
-        docker("network", "create", self.network)
+        logger.info(f"Starting the stack {self.network.name} for the {self.variant} variant")
         self.start_node()
         self.start_wallet()
         self.start_light()
 
     def stop(self) -> None:
-        for service in self.images:
-            docker("rm", "-fv", self.name(service), check=False)
-        docker("network", "rm", self.network, check=False)
+        for container in self.containers.values():
+            container.remove()
+        self.network.remove()
 
     def new_account(self, name: str) -> Account:
         """Create a wallet and return its keys."""
@@ -195,6 +170,18 @@ def stack(request: pytest.FixtureRequest, variant: str):
         if logs_dir:
             stack.save_logs(pathlib.Path(logs_dir))
         stack.stop()
+
+
+@pytest.fixture
+def containers(request: pytest.FixtureRequest) -> Iterator[Containers]:
+    """Containers of the test alone, for the tests of the images."""
+    logs_dir = request.config.getoption("--logs-dir")
+    label = re.sub(r"[^A-Za-z0-9_.-]+", "-", request.node.name).strip("-")
+    containers = Containers(label, pathlib.Path(logs_dir) if logs_dir else None)
+    try:
+        yield containers
+    finally:
+        containers.cleanup()
 
 
 @pytest.fixture(scope="session")
