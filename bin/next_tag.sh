@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# print the next release tag for the monero version of the submodule, e.g. v0.18.5.1-2
+# print the next release tag for the monero version of the submodule, e.g. v0.18.5.3-2
 # REPO is where the existing tags are looked up
 set -euo pipefail
 

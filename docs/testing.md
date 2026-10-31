@@ -13,7 +13,7 @@ docker compose -f examples/regtest/docker-compose.yml up -d
 | xmr_wallet_1, 2, 3 | `18082`, `18083`, `18084` |
 | xmr_lws | `8443` rest, `8444` admin rest |
 
-Logins are `rpc_daemon_user:abc123` for the nodes and `rpc_user:abc123` for the wallets. Set `MONERO_TAG` to a version tag, for example `MONERO_TAG=v0.18.5.1-1 docker compose ... up -d`, to keep the tests on the same Monero.
+Logins are `rpc_daemon_user:abc123` for the nodes and `rpc_user:abc123` for the wallets. Set `MONERO_TAG` to a version tag, for example `MONERO_TAG=v0.18.5.3-1 docker compose ... up -d`, to keep the tests on the same Monero.
 
 Blocks are created with the `generateblocks` rpc, which only exists in regtest, here mining 10 blocks to the first wallet:
 
