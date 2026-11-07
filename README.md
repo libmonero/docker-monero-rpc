@@ -16,20 +16,15 @@ Dockerized `monerod`, `monero-wallet-rpc` and the [monero-lws](https://github.co
 
 * Separate `monerod`, `monero-wallet-rpc` and `monero-wallet-light` images built from a single Dockerfile.
 * Builds for `linux/amd64` and `linux/arm64`.
-* Meant for development and testing against regtest, a [private testnet](docs/private-testnet.md) with fast hardforks, or mainnet.
+* Meant for development and testing against regtest or mainnet.
 
 ## Images
 
-| Image | Variant | Binary | Default ports |
-|-------|---------|--------|---------------|
-| `monero-daemon-rpc` | [default](https://github.com/woodser/monero) | `monerod` | `18080` p2p, `18081` rpc |
-| `monero-daemon-rpc` | [private-testnet](docs/private-testnet.md) | `monerod` | `28080` p2p, `28081` rpc |
-| `monero-wallet-rpc` | [default](https://github.com/woodser/monero) | `monero-wallet-rpc` | `18083` rpc |
-| `monero-wallet-rpc` | [private-testnet](docs/private-testnet.md) | `monero-wallet-rpc` | `28083` rpc |
-| `monero-wallet-light` | [default](https://github.com/vtnerd/monero-lws) | `monero-lws-daemon`, `monero-lws-admin` | `8443` rest |
-| `monero-wallet-light` | [private-testnet](docs/private-testnet.md) | `monero-lws-daemon`, `monero-lws-admin` | `8443` rest |
-
-The `private-testnet` variant is built with [patches](patches) that schedule the testnet hardforks at low block heights and drop the checkpoints of the public testnet, for private testnets. Its tags are prefixed with `private-testnet-`.
+| Image | Binary | Default ports |
+|-------|--------|---------------|
+| `monero-daemon-rpc` | `monerod` | `18080` p2p, `18081` rpc |
+| `monero-wallet-rpc` | `monero-wallet-rpc` | `18083` rpc |
+| `monero-wallet-light` | `monero-lws-daemon`, `monero-lws-admin` | `8443` rest |
 
 ## Documentation
 
@@ -38,7 +33,6 @@ The `private-testnet` variant is built with [patches](patches) that schedule the
 * [Releases](docs/releases.md)
 * [Security](docs/security.md)
 * [Tests](docs/testing.md), with a regtest [compose file](examples/regtest/docker-compose.yml)
-* [Private testnet](docs/private-testnet.md), with a [compose file](examples/private-testnet/docker-compose.yml)
 * [Compose example](examples/docker-compose.yml) with a node and a wallet
 
 ## Related projects
@@ -56,7 +50,7 @@ Thanks to [@sethforprivacy](https://github.com/sethforprivacy) and [@lalanza808]
 * [simple-monerod-docker](https://github.com/sethforprivacy/simple-monerod-docker): the static build on Alpine, the healthcheck, the smoke tests and the build and publish workflows.
 * [docker-monero-node](https://github.com/lalanza808/docker-monero-node): the images the tests of monero-python and monero-java have been using, and the compose files with log rotation and variables.
 
-Parts of both were adapted under their MIT licenses, see [NOTICE](NOTICE). The patch of the [private testnet](docs/private-testnet.md) is by woodser, from [haveno-dex/monero](https://github.com/haveno-dex/monero).
+Parts of both were adapted under their MIT licenses, see [NOTICE](NOTICE).
 
 ## License
 

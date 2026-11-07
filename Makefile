@@ -1,9 +1,8 @@
 .DEFAULT_GOAL := help
 
-VARIANT ?= default
 NPROC ?=
 PYTEST ?=
-BUILD_ARGS = --build-arg VARIANT=$(VARIANT) $(if $(NPROC),--build-arg NPROC=$(NPROC))
+BUILD_ARGS = $(if $(NPROC),--build-arg NPROC=$(NPROC))
 
 .PHONY: help submodules update build test functional
 
@@ -16,15 +15,15 @@ submodules: ## Initialize the submodules
 update: ## Move monero-project to a monero-cpp release, e.g. make update TAG=v0.9.10
 	./bin/update_monero_rpc.sh $(TAG)
 
-build: ## Build the images, e.g. make build VARIANT=private-testnet NPROC=1
-	docker build --target monero-daemon-rpc $(BUILD_ARGS) -t monero-daemon-rpc:$(VARIANT) .
-	docker build --target monero-wallet-rpc $(BUILD_ARGS) -t monero-wallet-rpc:$(VARIANT) .
-	docker build --target monero-wallet-light $(BUILD_ARGS) -t monero-wallet-light:$(VARIANT) .
+build: ## Build the images, e.g. make build NPROC=1
+	docker build --target monero-daemon-rpc $(BUILD_ARGS) -t monero-daemon-rpc:default .
+	docker build --target monero-wallet-rpc $(BUILD_ARGS) -t monero-wallet-rpc:default .
+	docker build --target monero-wallet-light $(BUILD_ARGS) -t monero-wallet-light:default .
 
 test: ## Run the pytest tests on the images of make build, e.g. make test PYTEST="tests/test_images.py -k daemon"
-	./bin/pytest_tests.sh monero-daemon-rpc:$(VARIANT) monero-wallet-rpc:$(VARIANT) monero-wallet-light:$(VARIANT) $(VARIANT) $(PYTEST)
+	./bin/pytest_tests.sh monero-daemon-rpc:default monero-wallet-rpc:default monero-wallet-light:default $(PYTEST)
 
 functional: ## Run the functional tests of monero-project on the images of make build, e.g. make functional TESTS="uri wallet"
-	./bin/extract_binaries.sh build/binaries monero-daemon-rpc:$(VARIANT) monerod
-	./bin/extract_binaries.sh build/binaries monero-wallet-rpc:$(VARIANT) monero-wallet-rpc
+	./bin/extract_binaries.sh build/binaries monero-daemon-rpc:default monerod
+	./bin/extract_binaries.sh build/binaries monero-wallet-rpc:default monero-wallet-rpc
 	./bin/functional_tests.sh build/binaries $(TESTS)

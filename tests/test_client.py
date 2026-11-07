@@ -6,12 +6,12 @@ from monero_daemon_light import MoneroDaemonLight
 logger: logging.Logger = logging.getLogger("TestClient")
 
 
-def test_get_version(light: MoneroDaemonLight, variant: str) -> None:
+def test_get_version(light: MoneroDaemonLight) -> None:
     version = light.get_version()
     logger.info(f"Server {version['server_type']} {version['server_version']}, network testnet={version['testnet']}")
     assert version["server_type"]
     assert version["max_subaddresses"] == 1000
-    assert version["testnet"] == (variant == "private-testnet")
+    assert not version["testnet"]
 
 
 def test_daemon_status(light: MoneroDaemonLight) -> None:

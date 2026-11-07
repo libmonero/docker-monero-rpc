@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         image: [ monero-daemon-rpc, monero-wallet-rpc, monero-wallet-light ]
-        tag: [ master, private-testnet-master ]
+        tag: [ master ]
 
     steps:
       - name: Scan

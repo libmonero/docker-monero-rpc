@@ -16,8 +16,7 @@ from monero_wallet_rpc import MoneroWalletRpc
 
 logger: logging.Logger = logging.getLogger("conftest")
 
-# blocks made before the tests, the last hardfork of the private testnet is at height 150
-BLOCKS = {"default": 20, "private-testnet": 160}
+BLOCKS = 20
 
 # debug, the highest (4) when the job is rerun with the debug logging of github
 LOG_LEVEL = 4 if os.environ.get("RUNNER_DEBUG") == "1" else 2
@@ -29,7 +28,6 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption("--variant", default="default", choices=list(BLOCKS), help="variant of the images")
     parser.addoption("--daemon-image", default=os.environ.get("MONERO_DAEMON_IMAGE"), help="monero-daemon-rpc image")
     parser.addoption("--wallet-image", default=os.environ.get("MONERO_WALLET_IMAGE"), help="monero-wallet-rpc image")
     parser.addoption("--logs-dir", default=None, help="directory to save the logs of the containers to")
@@ -44,21 +42,15 @@ class Account(NamedTuple):
 class Stack:
     """A node, a wallet and a light wallet server on a docker network of their own.
 
-    Regtest is used by the default variant and the testnet by private-testnet, the ports
-    that tests talk to are published to localhost on free ports."""
+    The tests use regtest, and the ports that they talk to are published to localhost on free ports."""
 
-    def __init__(self, variant: str, daemon_image: str, wallet_image: str, light_image: str) -> None:
-        self.variant = variant
+    def __init__(self, daemon_image: str, wallet_image: str, light_image: str) -> None:
         self.images = {"node": daemon_image, "wallet": wallet_image, "light": light_image}
         self.network = client.networks.create(f"light-tests-{uuid.uuid4().hex[:8]}")
         self.containers: dict[str, Container] = {}
         self.node: MoneroDaemonRpc
         self.wallet: MoneroWalletRpc
         self.light: MoneroDaemonLight
-        self.net_args = {
-            "default": {"node": ["--regtest", "--fixed-difficulty=1"], "wallet": [], "light": ["--regtest"]},
-            "private-testnet": {"node": ["--testnet", "--fixed-difficulty=1"], "wallet": ["--testnet"], "light": ["--network=test"]},
-        }[variant]
 
     def run(self, service: str, args: list[str], ports: list[int]) -> Container:
         container = Container(self.images[service], args, f"{self.network.name}-{service}", ports=ports, network=self.network.name)
@@ -81,7 +73,7 @@ class Stack:
         return f"{service}: {container.status()}\n" + "\n".join(f"{count}x {line}" if count > 1 else line for line, count in counts.items())
 
     def start_node(self) -> None:
-        node = self.run("node", [*self.net_args["node"], "--offline", "--no-igd", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081",
+        node = self.run("node", ["--regtest", "--fixed-difficulty=1", "--offline", "--no-igd", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081",
                           "--confirm-external-bind", "--zmq-rpc-bind-ip=0.0.0.0", "--zmq-rpc-bind-port=18082",
                           "--confirm-zmq-rpc-external-bind", "--zmq-pub=tcp://0.0.0.0:18083", f"--log-level={LOG_LEVEL}"], [18081, 18083])
         node.wait_healthy()
@@ -89,14 +81,14 @@ class Stack:
         self.node_zmq = node.url(18083).replace("http://", "tcp://")
 
     def start_wallet(self) -> None:
-        wallet = self.run("wallet", [*self.net_args["wallet"], "--offline", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18084",
+        wallet = self.run("wallet", ["--offline", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18084",
                             "--confirm-external-bind", "--disable-rpc-login", "--wallet-dir=/home/monero/wallets",
                             "--log-file=/dev/null", f"--log-level={LOG_LEVEL}"], [18084])
         wallet.wait_healthy()
         self.wallet = MoneroWalletRpc(wallet.url(18084))
 
     def start_light(self) -> None:
-        light = self.run("light", [*self.net_args["light"], f"--daemon=tcp://{self.containers['node'].name}:18082",
+        light = self.run("light", ["--regtest", f"--daemon=tcp://{self.containers['node'].name}:18082",
                            f"--sub=tcp://{self.containers['node'].name}:18083", "--zmq-pub=tcp://0.0.0.0:18090",
                            "--rest-server=http://0.0.0.0:8443", "--admin-rest-server=http://0.0.0.0:8444",
                            "--disable-admin-auth", "--confirm-external-bind", "--auto-accept-creation",
@@ -121,7 +113,7 @@ class Stack:
         raise RuntimeError(f"light did not sync with the node\n{self.containers['light'].logs(30)}")
 
     def start(self) -> None:
-        logger.info(f"Starting the stack {self.network.name} for the {self.variant} variant")
+        logger.info(f"Starting the stack {self.network.name}")
         self.start_node()
         self.start_wallet()
         self.start_light()
@@ -140,28 +132,16 @@ class Stack:
         """Make blocks for an address and return the height of the node."""
         target = self.node.get_height() + blocks
         logger.info(f"Making {blocks} blocks for {address[:12]}... up to height {target}")
-        if self.variant == "default":
-            self.node.generate_blocks(address, blocks)
-        else:
-            self.node.start_mining(address)
-            deadline = time.monotonic() + 120
-            while self.node.get_height() < target and time.monotonic() < deadline:
-                time.sleep(1)
-            self.node.stop_mining()
+        self.node.generate_blocks(address, blocks)
         return self.node.get_height()
 
 
 @pytest.fixture(scope="session")
-def variant(request: pytest.FixtureRequest) -> str:
-    return request.config.getoption("--variant")
-
-
-@pytest.fixture(scope="session")
-def stack(request: pytest.FixtureRequest, variant: str):
+def stack(request: pytest.FixtureRequest):
     images = [request.config.getoption(f"--{name}-image") for name in ("daemon", "wallet", "light")]
     if not all(images):
         pytest.fail("the images are needed: --daemon-image, --wallet-image and --light-image")
-    stack = Stack(variant, *images)
+    stack = Stack(*images)
     try:
         stack.start()
         yield stack
@@ -200,13 +180,13 @@ def light(stack: Stack) -> MoneroDaemonLight:
 
 
 @pytest.fixture(scope="session")
-def account(stack: Stack, variant: str) -> Account:
+def account(stack: Stack) -> Account:
     """An account of the light wallet server that has been mined to and scanned."""
     account = stack.new_account("miner")
     logger.info(f"Created the account {account.address[:12]}... of the miner")
     try:
         stack.light.login(account.address, account.view_key, create_account=True, generated_locally=True)
-        height = stack.mine(BLOCKS[variant], account.address)
+        height = stack.mine(BLOCKS, account.address)
         # the account starts at the checkpoint of lws until it syncs with a node that has blocks, then it is rolled back
         stack.wait_synced()
         scanned = stack.light.wait_for_scan_height(account.address, account.view_key, height - 1, timeout_seconds=120)
