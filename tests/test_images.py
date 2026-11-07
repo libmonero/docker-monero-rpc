@@ -20,8 +20,7 @@ logger: logging.Logger = logging.getLogger("TestImages")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# the heights of the hard fork versions 2 and 16 of the testnet
-HARD_FORKS = {"default": (624634, 1983520), "private-testnet": (10, 150)}
+HARD_FORKS = (624634, 1983520)
 
 MODES = ["args", "config", "hardened"]
 
@@ -86,10 +85,6 @@ def test_runs_as_a_user(any_image: tuple[str, str]) -> None:
     assert client.containers.run(any_image[1], ["-u"], entrypoint="id", remove=True).decode().strip() != "0"
 
 
-def test_variant_label(any_image: tuple[str, str], variant: str) -> None:
-    assert client.images.get(any_image[1]).labels["io.libmonero.variant"] == variant
-
-
 @pytest.mark.parametrize("mode", MODES)
 def test_daemon(containers: Containers, daemon_image: str, mode: str) -> None:
     args = ["--stagenet", "--offline", "--rpc-bind-ip=0.0.0.0", "--confirm-external-bind", "--rpc-bind-port=40001",
@@ -101,12 +96,12 @@ def test_daemon(containers: Containers, daemon_image: str, mode: str) -> None:
     assert container.stop() == 0
 
 
-def test_daemon_hard_forks(containers: Containers, daemon_image: str, variant: str) -> None:
+def test_daemon_hard_forks(containers: Containers, daemon_image: str) -> None:
     container = containers.run(daemon_image, ["--testnet", "--offline", "--rpc-bind-ip=0.0.0.0", "--confirm-external-bind",
                                               f"--log-level={LOG_LEVEL}"], ports=[28081])
     container.wait_healthy()
     node = MoneroDaemonRpc(container.url(28081))
-    assert (node.hard_fork_info(2)["earliest_height"], node.hard_fork_info(16)["earliest_height"]) == HARD_FORKS[variant]
+    assert (node.hard_fork_info(2)["earliest_height"], node.hard_fork_info(16)["earliest_height"]) == HARD_FORKS
 
 
 @pytest.mark.parametrize("mode", MODES)

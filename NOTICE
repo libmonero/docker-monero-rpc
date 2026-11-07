@@ -28,7 +28,7 @@ SOFTWARE.
 
 ## monero-project
 
-The images contain binaries built from [woodser/monero](https://github.com/woodser/monero), a fork of [monero-project/monero](https://github.com/monero-project/monero), which is released under the BSD 3-Clause license, Copyright (c) 2014-2022, The Monero Project. Its license is in `/usr/share/licenses/monero-project/LICENSE` in the images. The files in [patches](patches) are changes to its sources and are under the same license. The `private-testnet` patch is by woodser, from [haveno-dex/monero](https://github.com/haveno-dex/monero).
+The images contain binaries built from [woodser/monero](https://github.com/woodser/monero), a fork of [monero-project/monero](https://github.com/monero-project/monero), which is released under the BSD 3-Clause license, Copyright (c) 2014-2022, The Monero Project. Its license is in `/usr/share/licenses/monero-project/LICENSE` in the images.
 
 The `monero-wallet-light` image also contains [monero-lws](https://github.com/vtnerd/monero-lws), released under the BSD 3-Clause license, Copyright (c) 2018-2020, The Monero Project. Its license is in `/usr/share/licenses/monero-lws/LICENSE` in the image.
 

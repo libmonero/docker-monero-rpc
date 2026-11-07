@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-# usage: pytest_tests.sh <monero-daemon-rpc image> <monero-wallet-rpc image> <monero-wallet-light image> [default|private-testnet] [pytest arguments]
+# usage: pytest_tests.sh <monero-daemon-rpc image> <monero-wallet-rpc image> <monero-wallet-light image> [pytest arguments]
 # runs the pytest tests of tests/, or the arguments, on containers of the images
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VENV=$ROOT/build/tests/venv
 
-IMAGES=(--daemon-image "$1" --wallet-image "$2" --light-image "$3" --variant "${4:-default}")
-shift $(( $# < 4 ? $# : 4 ))
+IMAGES=(--daemon-image "$1" --wallet-image "$2" --light-image "$3")
+shift 3
 [ $# -gt 0 ] || set -- "$ROOT/tests"
 
 [ -d "$VENV" ] || python3 -m venv "$VENV"

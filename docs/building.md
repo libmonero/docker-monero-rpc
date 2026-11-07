@@ -9,19 +9,11 @@
     docker build --target monero-wallet-light -t monero-wallet-light .
     ```
     Or `make build`, see `make help`.
-4. Run the tests: `make test`, or `./bin/pytest_tests.sh <daemon image> <wallet image> <light image> [variant] [pytest arguments]`, for example with `tests/test_images.py -k daemon` for a part.
+4. Run the tests: `make test`, or `./bin/pytest_tests.sh <daemon image> <wallet image> <light image> [pytest arguments]`, for example with `tests/test_images.py -k daemon` for a part.
 
 The Monero version of the images is the one of the submodule, `./bin/monero_version.sh` prints it as `monerod --version` does.
 
 `monero-wallet-light` is [monero-lws](https://github.com/vtnerd/monero-lws) at the tag of the `external/monero-lws` submodule, built against the same monero-project. Use the release branch of monero-lws that matches the Monero of the submodule, `release-v1.0_0.18` for Monero 0.18: `git -C external/monero-lws fetch --tags && git -C external/monero-lws checkout v1.0.5`, and commit the new reference.
-
-## Variants
-
-`VARIANT` names the patches in [patches](../patches) to apply to the sources, see [private testnet](private-testnet.md):
-
-```bash
-docker build --target monero-daemon-rpc --build-arg VARIANT=private-testnet -t monero-daemon-rpc:private-testnet .
-```
 
 ## Limiting the build
 
@@ -33,7 +25,7 @@ The compiler cache is kept in a Docker cache mount, so after a change in the sub
 
 ## Updating monero-project
 
-`./bin/update_monero_rpc.sh <tag>` moves the submodule to the commit pinned by a [monero-cpp](https://github.com/woodser/monero-cpp) release, for example `./bin/update_monero_rpc.sh v0.9.10`, and checks that the patches still apply. Commit the new submodule reference.
+`./bin/update_monero_rpc.sh <tag>` moves the submodule to the commit pinned by a [monero-cpp](https://github.com/woodser/monero-cpp) release, for example `./bin/update_monero_rpc.sh v0.9.10`. Commit the new submodule reference.
 
 ## Without Docker
 

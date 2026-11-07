@@ -2,23 +2,15 @@
 
 # usage: build_in_docker.sh <daemon|wallet_rpc_server|lws> <output directory>
 # builds in the docker build stages, on a throwaway copy of the sources without
-# git metadata: the version tag is in /version and VARIANT names a patch to apply
+# git metadata: the version tag is in /version
 set -euo pipefail
 
 TARGET=$1
 OUTPUT=$2
-VARIANT=${VARIANT:-default}
 TAG=$(cat /version)
 
 cd /src
 rm -f external/*/.git
-
-# the patches of the variant, patches/<variant>*.patch
-if [ "$VARIANT" != default ]; then
-    for patch in /src/patches/"$VARIANT"*.patch; do
-        git -C external/monero-project apply "$patch"
-    done
-fi
 
 # what monero-project would have asked git for
 release=false

@@ -20,9 +20,9 @@ def test_create_wallet(stack: Stack) -> None:
     assert re.fullmatch("[0-9a-f]{64}", account.view_key)
 
 
-def test_validate_address(stack: Stack, variant: str) -> None:
+def test_validate_address(stack: Stack) -> None:
     account = stack.new_account("validated")
     result = stack.wallet.validate_address(account.address)
     assert result["valid"]
-    assert result["nettype"] == ("testnet" if variant == "private-testnet" else "mainnet")
+    assert result["nettype"] == "mainnet"
     assert not stack.wallet.validate_address("not an address")["valid"]

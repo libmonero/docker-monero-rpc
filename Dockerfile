@@ -32,15 +32,13 @@ RUN --mount=type=bind,source=.git/modules/external/monero-project,target=/git \
     echo "$tag" > /version
 
 # The sources are bind mounted instead of copied to keep the layers small, and
-# only the paths the build needs. VARIANT names the patches in patches/ to apply, patches/<variant>*.patch.
+# only the paths the build needs.
 FROM build AS build-monero-daemon-rpc
 
 COPY --from=version /version /version
 
-ARG VARIANT=default
 RUN --mount=type=bind,source=bin/build_monero_rpc.sh,target=/src/bin/build_monero_rpc.sh \
     --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
-    --mount=type=bind,source=patches,target=/src/patches \
     --mount=type=bind,source=external/monero-project,target=/src/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
     /src/bin/build_in_docker.sh daemon /out
@@ -49,10 +47,8 @@ FROM build AS build-monero-wallet-rpc
 
 COPY --from=version /version /version
 
-ARG VARIANT=default
 RUN --mount=type=bind,source=bin/build_monero_rpc.sh,target=/src/bin/build_monero_rpc.sh \
     --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
-    --mount=type=bind,source=patches,target=/src/patches \
     --mount=type=bind,source=external/monero-project,target=/src/external/monero-project,rw \
     --mount=type=cache,target=/ccache \
     /src/bin/build_in_docker.sh wallet_rpc_server /out
@@ -62,10 +58,8 @@ FROM build AS build-monero-wallet-light
 
 COPY --from=version /version /version
 
-ARG VARIANT=default
 RUN --mount=type=bind,source=bin/build_monero_lws.sh,target=/src/bin/build_monero_lws.sh \
     --mount=type=bind,source=bin/build_in_docker.sh,target=/src/bin/build_in_docker.sh \
-    --mount=type=bind,source=patches,target=/src/patches \
     --mount=type=bind,source=external/monero-project,target=/src/external/monero-project,rw \
     --mount=type=bind,source=external/monero-lws,target=/src/external/monero-lws,rw \
     --mount=type=cache,target=/ccache \
@@ -84,10 +78,8 @@ RUN retry apk upgrade --no-cache && \
 
 ENV HOME=/home/monero
 
-ARG VARIANT=default
 LABEL org.opencontainers.image.source="https://github.com/libmonero/docker-monero-rpc" \
-      org.opencontainers.image.licenses="MIT AND BSD-3-Clause" \
-      io.libmonero.variant="${VARIANT}"
+      org.opencontainers.image.licenses="MIT AND BSD-3-Clause"
 
 COPY --chmod=0644 docker/healthcheck-common.sh /usr/local/lib/healthcheck-common.sh
 COPY external/monero-project/LICENSE /usr/share/licenses/monero-project/LICENSE

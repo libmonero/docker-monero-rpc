@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   linux:
-    name: ${{ matrix.arch }} ${{ matrix.variant }}
+    name: ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
 
@@ -25,7 +25,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-24.04, ubuntu-24.04-arm ]
-        variant: [ default, private-testnet ]
         include:
           - os: ubuntu-24.04
             arch: linux-x86_64
@@ -57,7 +56,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ccache
-          key: ccache-${{ matrix.arch }}-${{ matrix.variant }}-${{ github.run_id }}
+          key: ccache-${{ matrix.arch }}-${{ github.run_id }}
           restore-keys: |
             ccache-${{ matrix.arch }}-
 
@@ -76,10 +75,9 @@ jobs:
           context: .
           target: monero-daemon-rpc
           tags: monero-daemon-rpc:ci
-          build-args: VARIANT=${{ matrix.variant }}
           load: true
-          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-daemon
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}-daemon', matrix.arch, matrix.variant) || '' }}
+          cache-from: type=gha,scope=${{ matrix.arch }}-daemon
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-daemon', matrix.arch) || '' }}
 
       - name: Build monero-wallet-rpc
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -87,10 +85,9 @@ jobs:
           context: .
           target: monero-wallet-rpc
           tags: monero-wallet-rpc:ci
-          build-args: VARIANT=${{ matrix.variant }}
           load: true
-          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}-wallet', matrix.arch, matrix.variant) || '' }}
+          cache-from: type=gha,scope=${{ matrix.arch }}-wallet
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-wallet', matrix.arch) || '' }}
 
       - name: Build monero-wallet-light
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -98,10 +95,9 @@ jobs:
           context: .
           target: monero-wallet-light
           tags: monero-wallet-light:ci
-          build-args: VARIANT=${{ matrix.variant }}
           load: true
-          cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.variant }}-wallet-light
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}-wallet-light', matrix.arch, matrix.variant) || '' }}
+          cache-from: type=gha,scope=${{ matrix.arch }}-wallet-light
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-wallet-light', matrix.arch) || '' }}
 
       - name: Extract binaries
         run: |
@@ -115,7 +111,7 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: monero-rpc-${{ matrix.arch }}-${{ matrix.variant }}-${{ env.SHORT_SHA }}
+          name: monero-rpc-${{ matrix.arch }}-${{ env.SHORT_SHA }}
           path: |
             binaries/monerod
             binaries/monero-wallet-rpc
@@ -129,7 +125,7 @@ jobs:
       - name: Upload the images
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: images-${{ matrix.arch }}-${{ matrix.variant }}-${{ env.SHORT_SHA }}
+          name: images-${{ matrix.arch }}-${{ env.SHORT_SHA }}
           path: images/*.tar.zst
           compression-level: 0
           retention-days: 2
